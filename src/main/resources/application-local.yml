@@ -1,0 +1,11 @@
+# Local development profile
+# JWT secret is optional — filter falls back to unsigned decode.
+
+shipsmart:
+  security:
+    require-jwt-secret: false
+
+logging:
+  level:
+    com.shipsmart: DEBUG
+    org.springframework.security: DEBUG
