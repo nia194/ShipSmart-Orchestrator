@@ -1,0 +1,15 @@
+// ShipSmart Java API — Gradle Settings
+// Spring Boot 4.0.5 + Gradle 9.4.1 + Java 25
+//
+// VERSION NOTICE: Spring Boot 4.0.x targets Spring Framework 7.x.
+// Verify GA availability before production use.
+// Spring Boot 4.0 requires Java 17 minimum; Java 25 (GA Sep 2025) is supported.
+
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = "shipsmart-api-java"
