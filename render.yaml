@@ -36,7 +36,7 @@ services:
         value: https://shipsmart-api-python.onrender.com
       # ── FedEx Real API Integration ────────────────────────────────────────
       - key: FEDEX_BASE_URL
-        value: https://apis.fedex.com
+        value: https://apis-sandbox.fedex.com
       - key: FEDEX_CLIENT_ID
         sync: false
       - key: FEDEX_CLIENT_SECRET
