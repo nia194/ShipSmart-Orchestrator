@@ -1,0 +1,52 @@
+# ─── Gradle ───────────────────────────────────────────────────────────────────
+.gradle/
+build/
+out/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ─── Java ─────────────────────────────────────────────────────────────────────
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ─── Spring Boot ──────────────────────────────────────────────────────────────
+HELP.md
+spring-shell.log
+
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+bin/
+
+# ─── Env / Secrets ────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+# Root-level per-machine overrides only. Spring profile file at
+# src/main/resources/application-local.yml is checked in and must not be ignored.
+/application-local.yml
+/application-local.properties
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Claude / AI tooling (local only, never commit) ───────────────────────────
+.claude/
+

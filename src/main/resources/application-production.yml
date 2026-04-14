@@ -1,0 +1,17 @@
+# Production profile (Render)
+# JWT secret MUST be set — app will fail to start otherwise.
+
+shipsmart:
+  security:
+    require-jwt-secret: true
+
+logging:
+  level:
+    root: WARN
+    com.shipsmart: INFO
+    org.springframework.security: WARN
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never

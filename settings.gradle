@@ -1,0 +1,11 @@
+// ShipSmart Java API — Gradle Settings
+// Spring Boot 3.4.4 + Gradle 8.12 + Java 17 (see build.gradle for actual versions).
+
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = "shipsmart-api-java"
