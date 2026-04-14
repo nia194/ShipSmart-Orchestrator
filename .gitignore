@@ -50,3 +50,4 @@ Thumbs.db
 # ─── Claude / AI tooling (local only, never commit) ───────────────────────────
 .claude/
 
+!gradle/wrapper/gradle-wrapper.jar
