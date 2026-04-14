@@ -24,14 +24,15 @@ public class EnvLoader {
                     .ignoreIfMissing()
                     .load();
 
-            // Load variables into System properties
-            dotenv.entries().forEach(entry -> {
-                if (System.getenv(entry.getKey()) == null && System.getProperty(entry.getKey()) == null) {
-                    System.setProperty(entry.getKey(), entry.getValue());
-                }
-            });
+            // Load variables into System properties and let local .env win over
+            // inherited shell env vars. This keeps `./gradlew bootRun` stable
+            // when the developer terminal already contains datasource settings
+            // from another project.
+            dotenv.entries().forEach(entry ->
+                    System.setProperty(entry.getKey(), entry.getValue())
+            );
 
-            log.info("Environment variables loaded from .env file");
+            log.info("Environment variables loaded from .env file (overriding inherited shell env)");
         } catch (DotenvException e) {
             log.warn("No .env file found or error reading it (OK for production): {}", e.getMessage());
         }

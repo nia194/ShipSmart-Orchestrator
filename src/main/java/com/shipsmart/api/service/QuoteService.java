@@ -14,6 +14,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.UUID;
 
 /**
  * QuoteService — generates shipping quotes combining real and mock providers.
@@ -37,6 +38,34 @@ public class QuoteService {
     public QuoteService(ShipmentRequestRepository shipmentRequestRepository, FedExProvider fedExProvider) {
         this.shipmentRequestRepository = shipmentRequestRepository;
         this.fedExProvider = fedExProvider;
+    }
+
+    /**
+     * Re-generate quotes for an existing shipment request (by ID).
+     * Used by the Python AI service to fetch services for a previously persisted request.
+     * Returns null if the shipment request is not found.
+     */
+    public QuoteResponse regenerateQuotes(UUID shipmentRequestId) {
+        Optional<ShipmentRequest> opt = shipmentRequestRepository.findById(shipmentRequestId);
+        if (opt.isEmpty()) {
+            log.warn("Shipment request not found: {}", shipmentRequestId);
+            return null;
+        }
+        ShipmentRequest sr = opt.get();
+
+        double totalWeight = sr.getTotalWeight() != null ? sr.getTotalWeight() : 10.0;
+        int totalItems = sr.getTotalItems() != null ? sr.getTotalItems() : 1;
+
+        ShipmentForQuote shipment = new ShipmentForQuote(
+                sr.getOrigin(),
+                sr.getDestination(),
+                sr.getDropOffDate().toString(),
+                sr.getExpectedDeliveryDate().toString(),
+                List.of(), // packages not needed for quote generation logic
+                totalWeight,
+                totalItems
+        );
+        return buildQuotesWithRealProviders(shipment, totalWeight);
     }
 
     /**
