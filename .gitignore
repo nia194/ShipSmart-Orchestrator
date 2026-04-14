@@ -34,8 +34,10 @@ bin/
 .env
 .env.*
 !.env.example
-application-local.yml
-application-local.properties
+# Root-level per-machine overrides only. Spring profile file at
+# src/main/resources/application-local.yml is checked in and must not be ignored.
+/application-local.yml
+/application-local.properties
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
