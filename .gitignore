@@ -1,3 +1,4 @@
+
 # ─── Gradle ───────────────────────────────────────────────────────────────────
 .gradle/
 build/
@@ -51,3 +52,5 @@ Thumbs.db
 .claude/
 
 !gradle/wrapper/gradle-wrapper.jar
+
+build/
