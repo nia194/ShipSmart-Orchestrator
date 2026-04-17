@@ -18,7 +18,7 @@ Single writer to the Supabase Postgres database.
 | Saved options | `GET/POST/DELETE /api/v1/saved-options` | Authenticated CRUD on user-saved shipping options. |
 | Bookings | `POST /api/v1/bookings/redirect` | Carrier booking redirect with tracking. |
 | Shipments | `/api/v1/shipments` | Create / list / get shipment requests. *(stub — not yet implemented)* |
-| Health | `GET /api/v1/health`, `/actuator/health` | Liveness + Spring Actuator probes. |
+| Health | `GET /health`, `GET /api/v1/health`, `/actuator/health` | Root-level + prefixed liveness + Spring Actuator probes. |
 
 This is the **only** service that writes to Postgres. The Python service reads
 from it via internal HTTP for recommendation hydration; it never touches the
@@ -136,7 +136,6 @@ curl http://localhost:8080/actuator/health
 java -jar build/libs/shipsmart-api-java-0.1.0-SNAPSHOT.jar
 ```
 
-=======
 ---
 
 ## Auth
@@ -153,7 +152,6 @@ to work.
 ---
 
 
-=======
 ## Deployment
 
 Deployed to **Render** via `render.yaml`. The production profile
@@ -196,7 +194,6 @@ When changing any of the contracts above, update both
 ```
 
 
-=======
 36 tests — JUnit 5 with Spring Boot Test. The test profile
 (`application-test.yml`) uses H2 in-memory with PostgreSQL
 compatibility mode.
@@ -210,6 +207,5 @@ compatibility mode.
 - **All requests 401**: `SUPABASE_JWT_SECRET` is wrong (must match the project's signing secret exactly).
 - **CORS blocked from frontend**: add the frontend origin to `CORS_ALLOWED_ORIGINS` (comma-separated).
 
-=======
 - **FedEx quotes empty**: check `FEDEX_CLIENT_ID`, `FEDEX_CLIENT_SECRET`, and `FEDEX_ACCOUNT_NUMBER` are set. Verify `FEDEX_BASE_URL` points to the correct environment (sandbox vs production).
 - **Migrations**: SQL migrations live in `supabase/migrations/` at the repo root and are applied via `supabase db push`. The Java service does **not** run Flyway/Liquibase — schema is owned by Supabase migrations.
