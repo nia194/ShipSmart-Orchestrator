@@ -98,6 +98,10 @@ SUPABASE_JWT_SECRET=<JWT secret from Supabase dashboard>
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 INTERNAL_PYTHON_API_URL=http://localhost:8000
 
+# ShipSmart-MCP (tool server) — wired for upcoming AI features. Empty URL = off.
+SHIPSMART_MCP_URL=http://localhost:8001
+SHIPSMART_MCP_API_KEY=
+
 # FedEx API
 FEDEX_BASE_URL=https://apis.fedex.com
 FEDEX_CLIENT_ID=<your fedex client id>
@@ -180,10 +184,12 @@ they are marked `sync: false` in `render.yaml` and must never be committed.
 | Frontend → Java | `POST /api/v1/bookings/redirect` | Booking flow |
 | **Python → Java** | `GET /api/v1/quotes?shipmentRequestId=…` | Recommendation hydration when frontend posts only `shipment_request_id` |
 | **Python → Java** | `GET /api/v1/saved-options` | Reserved for future advisor enrichment |
+| **Java → MCP** | `POST /tools/list`, `POST /tools/call` | Reserved for upcoming AI-assist features. Config is wired via `shipsmart.mcp.base-url` / `SHIPSMART_MCP_URL`; no runtime call sites yet. See [`docs/mcp-integration.md`](docs/mcp-integration.md). |
 
 When changing any of the contracts above, update both
 `ShipSmart-API/app/services/java_client.py` and the frontend's
-`ShipSmart-Web/src/lib/*-api.ts` modules.
+`ShipSmart-Web/src/lib/*-api.ts` modules. For the MCP contract, the
+source of truth lives in the **ShipSmart-MCP** repo.
 
 ---
 
