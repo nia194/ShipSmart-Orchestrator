@@ -34,6 +34,13 @@ services:
         value: https://shipsmart-web.onrender.com
       - key: INTERNAL_PYTHON_API_URL
         value: https://shipsmart-api-python.onrender.com
+      # ── ShipSmart-MCP (tool server) ───────────────────────────────────────
+      # HTTP endpoint of the standalone MCP tool service. Populated today so
+      # Java AI features can call tools when wired — see docs/mcp-integration.md.
+      - key: SHIPSMART_MCP_URL
+        value: https://shipsmart-mcp.onrender.com
+      - key: SHIPSMART_MCP_API_KEY
+        sync: false
       # ── FedEx Real API Integration ────────────────────────────────────────
       - key: FEDEX_BASE_URL
         value: https://apis-sandbox.fedex.com
