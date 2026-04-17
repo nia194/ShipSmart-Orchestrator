@@ -4,6 +4,9 @@
 shipsmart:
   security:
     require-jwt-secret: true
+  mcp:
+    base-url: ${SHIPSMART_MCP_URL:}
+    api-key: ${SHIPSMART_MCP_API_KEY:}
 
 logging:
   level:
