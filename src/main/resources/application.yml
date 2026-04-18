@@ -25,6 +25,22 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  # ── Flyway (validate-only; Supabase remains the schema owner) ─────────────
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Supabase baseline (pre-interview-upgrade)"
+
+  # ── Cache ─────────────────────────────────────────────────────────────────
+  cache:
+    type: caffeine
+    cache-names: quotesByShipmentId,shipmentById
+    caffeine:
+      spec: maximumSize=5000,expireAfterWrite=120s
+
 server:
   # Render injects PORT automatically. Locally, fall back to SERVER_PORT or 8080.
   port: ${PORT:${SERVER_PORT:8080}}
@@ -36,11 +52,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,caches,prometheus
       base-path: /actuator
   endpoint:
     health:
       show-details: when-authorized
+  tracing:
+    sampling:
+      # Exporter is off by default in prod; flip-switch via env var or per-profile override.
+      probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:0.0}
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:}
 
 # ── Logging ─────────────────────────────────────────────────────────────────
 logging:
@@ -48,7 +71,7 @@ logging:
     root: INFO
     com.shipsmart: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{requestId}] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{requestId:-}] [%X{traceId:-}] [%X{userId:-}] %-5level %logger{36} - %msg%n"
 
 # ── App Config ──────────────────────────────────────────────────────────────
 shipsmart:
@@ -68,3 +91,39 @@ shipsmart:
     client-id: ${FEDEX_CLIENT_ID:}
     client-secret: ${FEDEX_CLIENT_SECRET:}
     account-number: ${FEDEX_ACCOUNT_NUMBER:}
+
+  # ── Rate limiting (Bucket4j; per-IP, in-memory) ───────────────────────────
+  rate-limit:
+    enabled: ${SHIPSMART_RATE_LIMIT_ENABLED:true}
+    shipments-per-minute: ${SHIPSMART_RATE_LIMIT_SHIPMENTS:20}
+    quotes-per-minute: ${SHIPSMART_RATE_LIMIT_QUOTES:30}
+    bookings-per-minute: ${SHIPSMART_RATE_LIMIT_BOOKINGS:10}
+
+  # ── Idempotency keys (POST /shipments, POST /bookings/redirect) ───────────
+  idempotency:
+    enabled: ${SHIPSMART_IDEMPOTENCY_ENABLED:true}
+    ttl-hours: ${SHIPSMART_IDEMPOTENCY_TTL_HOURS:24}
+
+  # ── Cache TTLs ────────────────────────────────────────────────────────────
+  cache:
+    quotes-ttl: ${SHIPSMART_CACHE_QUOTES_TTL:PT10M}
+    shipment-ttl: ${SHIPSMART_CACHE_SHIPMENT_TTL:PT2M}
+
+  # ── Quote provider fanout executor ────────────────────────────────────────
+  executor:
+    quote-provider:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 100
+    audit:
+      core-pool-size: 2
+      max-pool-size: 2
+      queue-capacity: 500
+
+# ── OpenAPI / Swagger UI ─────────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
