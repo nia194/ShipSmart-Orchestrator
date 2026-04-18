@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shipsmart.api.auth.SupabaseJwtVerifier;
 import com.shipsmart.api.config.SecurityConfig;
 import com.shipsmart.api.dto.BookingRedirectResponse;
+import com.shipsmart.api.repository.IdempotencyKeyRepository;
 import com.shipsmart.api.service.BookingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,9 @@ class BookingControllerTest {
 
     @MockitoBean
     private SupabaseJwtVerifier jwtVerifier;
+
+    @MockitoBean
+    private IdempotencyKeyRepository idempotencyKeyRepository;
 
     private static final String USER_ID = "11111111-1111-1111-1111-111111111111";
 

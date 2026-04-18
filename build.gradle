@@ -36,10 +36,30 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 
     // ── Database ─────────────────────────────────────────────────────────────
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'org.postgresql:postgresql'
+
+    // ── Flyway (validate-mode against Supabase-owned schema) ─────────────────
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // ── Caching ──────────────────────────────────────────────────────────────
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // ── Rate limiting ────────────────────────────────────────────────────────
+    implementation 'com.bucket4j:bucket4j-core:8.10.1'
+
+    // ── Observability: Micrometer → OTel bridge (exporter off by default) ────
+    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // ── OpenAPI / Swagger UI ─────────────────────────────────────────────────
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
     // ── JWT ──────────────────────────────────────────────────────────────────
     // Lightweight Supabase JWT verification (no Spring Security).
@@ -57,7 +77,11 @@ dependencies {
 
     // ── Test ─────────────────────────────────────────────────────────────────
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.awaitility:awaitility'
     testRuntimeOnly 'com.h2database:h2'
 }
 

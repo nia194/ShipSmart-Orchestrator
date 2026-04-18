@@ -9,3 +9,8 @@ logging:
   level:
     com.shipsmart: DEBUG
     org.springframework.security: DEBUG
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
