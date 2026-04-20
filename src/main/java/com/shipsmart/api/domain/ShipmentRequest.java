@@ -14,11 +14,16 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "shipment_requests")
-public class ShipmentRequest {
+@org.hibernate.annotations.SQLRestriction("deleted_at IS NULL")
+public class ShipmentRequest extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ShipmentStatus status = ShipmentStatus.DRAFT;
 
     @Column(name = "user_id")
     private String userId;
@@ -88,4 +93,7 @@ public class ShipmentRequest {
     public void setTotalItems(Integer totalItems) { this.totalItems = totalItems; }
 
     public Instant getCreatedAt() { return createdAt; }
+
+    public ShipmentStatus getStatus() { return status; }
+    public void setStatus(ShipmentStatus status) { this.status = status; }
 }
