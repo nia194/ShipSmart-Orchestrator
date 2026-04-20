@@ -14,7 +14,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "saved_options")
-public class SavedOption {
+@org.hibernate.annotations.SQLRestriction("deleted_at IS NULL")
+public class SavedOption extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
