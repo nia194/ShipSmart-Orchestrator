@@ -5,6 +5,7 @@ import com.shipsmart.api.auth.SupabaseJwtVerifier;
 import com.shipsmart.api.config.SecurityConfig;
 import com.shipsmart.api.dto.SavedOptionResponse;
 import com.shipsmart.api.dto.ShippingServiceDto;
+import com.shipsmart.api.repository.IdempotencyKeyRepository;
 import com.shipsmart.api.service.SavedOptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,9 @@ class SavedOptionControllerTest {
 
     @MockitoBean
     private SupabaseJwtVerifier jwtVerifier;
+
+    @MockitoBean
+    private IdempotencyKeyRepository idempotencyKeyRepository;
 
     private static final String USER_ID = "11111111-1111-1111-1111-111111111111";
 

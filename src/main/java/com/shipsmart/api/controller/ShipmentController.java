@@ -1,67 +1,105 @@
 package com.shipsmart.api.controller;
 
+import com.shipsmart.api.auth.AuthHelper;
+import com.shipsmart.api.dto.CreateShipmentRequest;
+import com.shipsmart.api.dto.PatchShipmentRequest;
+import com.shipsmart.api.dto.ShipmentSummaryDto;
+import com.shipsmart.api.exception.OwnershipException;
+import com.shipsmart.api.service.ShipmentService;
+import com.shipsmart.api.web.Idempotent;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Map;
+import java.net.URI;
+import java.time.Instant;
+import java.util.UUID;
 
-/**
- * Shipment API endpoints.
- * Owns core shipment request lifecycle (create, list, get).
- *
- * TODO: Implement shipment service and connect to Supabase Postgres via JPA/JDBC.
- * TODO: Add authentication via Supabase JWT validation.
- * TODO: Replace Map<> response types with proper DTOs.
- *
- * Service boundary: This controller owns shipment records.
- * The FastAPI service (api-python) may call this service for orchestration workflows.
- */
+import com.shipsmart.api.domain.ShipmentStatus;
+
 @RestController
 @RequestMapping("/api/v1/shipments")
+@Tag(name = "Shipments", description = "Create, read, update, soft-delete user shipments")
 public class ShipmentController {
 
-    // TODO: Inject ShipmentService once implemented
-    // private final ShipmentService shipmentService;
+    private final ShipmentService shipments;
 
-    /**
-     * GET /api/v1/shipments
-     * List shipments for the authenticated user.
-     * TODO: Implement — filter by user from JWT subject.
-     */
+    public ShipmentController(ShipmentService shipments) {
+        this.shipments = shipments;
+    }
+
     @GetMapping
-    public ResponseEntity<Map<String, Object>> listShipments() {
-        // TODO: return shipmentService.listForUser(currentUserId);
-        return ResponseEntity.ok(Map.of(
-                "data", java.util.List.of(),
-                "message", "TODO: implement shipment listing"
-        ));
+    @Operation(summary = "List shipments for the authenticated user (paginated, filterable)")
+    public Page<ShipmentSummaryDto> list(@RequestParam(required = false) ShipmentStatus status,
+                                         @RequestParam(required = false) Instant createdAfter,
+                                         @PageableDefault(size = 20) Pageable pageable) {
+        String userId = requireUserId();
+        return shipments.list(userId, status, createdAfter, pageable);
     }
 
-    /**
-     * GET /api/v1/shipments/{id}
-     * Get a single shipment by ID.
-     * TODO: Implement — validate user owns the shipment.
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getShipment(@PathVariable String id) {
-        // TODO: return shipmentService.getById(id, currentUserId);
-        return ResponseEntity.ok(Map.of(
-                "id", id,
-                "message", "TODO: implement shipment retrieval"
-        ));
+    @Operation(summary = "Fetch a single shipment the caller owns")
+    public ResponseEntity<ShipmentSummaryDto> get(@PathVariable UUID id) {
+        String userId = requireUserId();
+        ShipmentSummaryDto dto = shipments.getById(id, userId);
+        return ResponseEntity.ok()
+                .eTag("\"" + dto.version() + "\"")
+                .body(dto);
     }
 
-    /**
-     * POST /api/v1/shipments
-     * Create a new shipment request.
-     * TODO: Implement — validate request body, persist to Supabase, return created record.
-     */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createShipment(@RequestBody Map<String, Object> body) {
-        // TODO: return shipmentService.create(body, currentUserId);
-        return ResponseEntity.status(201).body(Map.of(
-                "message", "TODO: implement shipment creation",
-                "received", body
-        ));
+    @Idempotent
+    @Operation(summary = "Create a new shipment. Requires Idempotency-Key header.")
+    public ResponseEntity<ShipmentSummaryDto> create(@Valid @RequestBody CreateShipmentRequest body,
+                                                     UriComponentsBuilder uri) {
+        String userId = requireUserId();
+        ShipmentSummaryDto created = shipments.create(body, userId);
+        URI location = uri.path("/api/v1/shipments/{id}").buildAndExpand(created.id()).toUri();
+        return ResponseEntity.created(location)
+                .eTag("\"" + created.version() + "\"")
+                .body(created);
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Partial update; enforces If-Match for optimistic concurrency")
+    public ResponseEntity<ShipmentSummaryDto> patch(@PathVariable UUID id,
+                                                    @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+                                                    @Valid @RequestBody PatchShipmentRequest body) {
+        String userId = requireUserId();
+        Long expected = parseIfMatch(ifMatch);
+        ShipmentSummaryDto updated = shipments.updatePartial(id, userId, body, expected);
+        return ResponseEntity.ok()
+                .eTag("\"" + updated.version() + "\"")
+                .body(updated);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Soft-delete; resource remains recoverable for 30 days")
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        String userId = requireUserId();
+        shipments.softDelete(id, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    private String requireUserId() {
+        return AuthHelper.getUserId()
+                .orElseThrow(() -> new OwnershipException("Authenticated user required"));
+    }
+
+    private Long parseIfMatch(String ifMatch) {
+        if (ifMatch == null || ifMatch.isBlank()) return null;
+        String trimmed = ifMatch.replace("\"", "").replace("W/", "").trim();
+        try {
+            return Long.parseLong(trimmed);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
