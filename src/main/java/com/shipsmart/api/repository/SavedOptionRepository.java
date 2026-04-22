@@ -16,6 +16,9 @@ public interface SavedOptionRepository extends JpaRepository<SavedOption, UUID> 
     /** Fetch all saved options for a user, newest first. */
     List<SavedOption> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
+    /** Fetch all saved options for a user, unsorted — analytics sorts/groups in memory. */
+    List<SavedOption> findByUserId(UUID userId);
+
     /** Find a specific saved option owned by a user (for delete authorization). */
     Optional<SavedOption> findByIdAndUserId(UUID id, UUID userId);
 }

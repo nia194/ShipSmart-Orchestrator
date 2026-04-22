@@ -37,6 +37,9 @@ public class FedExQuoteProviderAdapter extends AbstractQuoteProvider {
 
     @Override public boolean isEnabled() { return credentialsPresent; }
 
+    /** FedEx goes first when credentials are present — real-time API beats mocks. */
+    @Override public int priority() { return 10; }
+
     @Override
     protected List<ProviderQuote> callCarrier(ProviderQuoteRequest req) {
         ShipmentForQuote legacy = new ShipmentForQuote(
