@@ -16,8 +16,11 @@ Single writer to the Supabase Postgres database.
 | Quotes | `POST /api/v1/quotes` | Generate shipping quotes for a shipment request. |
 | Quotes (hydration) | `GET /api/v1/quotes?shipmentRequestId=…` | Re-generate quotes for an existing shipment. Used by the Python service for recommendation hydration. |
 | Saved options | `GET/POST/DELETE /api/v1/saved-options` | Authenticated CRUD on user-saved shipping options. |
+| Saved option analytics | `GET /api/v1/saved-options/analytics` | Authenticated — per-user groupings (carriers, tiers, top-N priced, saves-per-month, route frequency buckets). |
 | Bookings | `POST /api/v1/bookings/redirect` | Carrier booking redirect with tracking. |
 | Shipments | `/api/v1/shipments` | Create / list / get shipment requests. *(stub — not yet implemented)* |
+| Provider inventory | `GET /api/v1/providers` | Authenticated — registered quote providers with priority + enabled flag. |
+| Provider metrics | `GET /api/v1/providers/metrics`, `/metrics/{carrier}/recent` | Authenticated — per-carrier counters (`SUCCESS`/`TIMEOUT`/`ERROR`/`DISABLED`) + last-N call events. |
 | Health | `GET /health`, `GET /api/v1/health`, `/actuator/health` | Root-level + prefixed liveness + Spring Actuator probes. |
 
 This is the **only** service that writes to Postgres. The Python service reads
@@ -51,9 +54,13 @@ HTTP request
 
 | Path | Purpose |
 |---|---|
-| `com.shipsmart.api.controller` | REST controllers (`Health`, `Shipment`, `Quote`, `SavedOption`, `Booking`). |
-| `com.shipsmart.api.service` | Business logic (quote generation, saved option CRUD, booking redirect). |
-| `com.shipsmart.api.service.provider` | Carrier integrations — `ShippingProvider` interface with `FedExProvider` implementation (FedEx Rate API v1, OAuth2 token management). |
+| `com.shipsmart.api.controller` | REST controllers (`Health`, `Shipment`, `Quote`, `SavedOption`, `SavedOptionAnalytics`, `Booking`, `ProviderMetrics`). |
+| `com.shipsmart.api.service` | Business logic (quote generation, saved option CRUD, saved-option analytics, booking redirect). |
+| `com.shipsmart.api.service.provider` | Legacy carrier integrations — `ShippingProvider` interface with `FedExProvider` implementation (FedEx Rate API v1, OAuth2 token management). |
+| `com.shipsmart.api.provider` | Strategy-based quote fanout: `QuoteProvider` interface (default-method `priority()`), `AbstractQuoteProvider` template, `QuoteProviderRegistry` (priority-sorted), `QuoteComparators` / `QuoteSortOption`, `FedExQuoteProviderAdapter`. |
+| `com.shipsmart.api.provider.metrics` | Per-carrier call metrics — `ProviderCallOutcome` enum (with per-constant behavior), `ProviderCallEvent` record, `ProviderMetrics` (`EnumMap` counters + `ArrayDeque` ring buffer per carrier). |
+| `com.shipsmart.api.cache` | In-memory LRU quote cache — `QuoteCacheKey` value object (`Comparable`, `equals`/`hashCode`), `QuoteCache` (`LinkedHashMap` access-order LRU + `ConcurrentHashMap` stats + `TreeMap` sorted view). |
+| `com.shipsmart.api.money` | `Money` value type — immutable, `Comparable`, flyweight cache of common whole-dollar values. |
 | `com.shipsmart.api.repository` | Spring Data JPA repositories. |
 | `com.shipsmart.api.domain` | JPA entities (`ShipmentRequest`, `SavedOption`, `RedirectTracking`). |
 | `com.shipsmart.api.dto` | Request/response DTOs. |
@@ -119,6 +126,16 @@ FedEx values come from the [FedEx Developer Portal](https://developer.fedex.com/
 Without the database variables the service will fail to start. Without
 `SUPABASE_JWT_SECRET`, authenticated requests will be rejected.
 
+### Optional tuning
+
+These have sensible defaults — override via env / `application.yml` if you need to.
+
+| Property | Default | Purpose |
+|---|---|---|
+| `shipsmart.quote-cache.max-entries` | `256` | LRU cap on cached fanout responses. |
+| `shipsmart.quote-cache.ttl-seconds` | `120` | Cached-response freshness window. |
+| `shipsmart.provider-metrics.recent-events` | `50` | Ring-buffer size for `GET /api/v1/providers/metrics/{carrier}/recent`. |
+
 
 ### Run
 
@@ -181,7 +198,9 @@ they are marked `sync: false` in `render.yaml` and must never be committed.
 |---|---|---|
 | Frontend → Java | `POST /api/v1/quotes` | Quote comparison page |
 | Frontend → Java | `GET/POST/DELETE /api/v1/saved-options` | Saved options page |
+| Frontend → Java | `GET /api/v1/saved-options/analytics` | Saved-options analytics widgets (per-user groupings, top-priced, route-frequency buckets). |
 | Frontend → Java | `POST /api/v1/bookings/redirect` | Booking flow |
+| Ops → Java | `GET /api/v1/providers`, `/api/v1/providers/metrics`, `/metrics/{carrier}/recent` | Carrier fanout observability — priority, enabled flag, per-outcome counters, last-N events. |
 | **Python → Java** | `GET /api/v1/quotes?shipmentRequestId=…` | Recommendation hydration when frontend posts only `shipment_request_id` |
 | **Python → Java** | `GET /api/v1/saved-options` | Reserved for future advisor enrichment |
 | **Java → MCP** | `POST /tools/list`, `POST /tools/call` | Reserved for upcoming AI-assist features. Config is wired via `shipsmart.mcp.base-url` / `SHIPSMART_MCP_URL`; no runtime call sites yet. See [`docs/mcp-integration.md`](docs/mcp-integration.md). |
@@ -214,4 +233,6 @@ compatibility mode.
 - **CORS blocked from frontend**: add the frontend origin to `CORS_ALLOWED_ORIGINS` (comma-separated).
 
 - **FedEx quotes empty**: check `FEDEX_CLIENT_ID`, `FEDEX_CLIENT_SECRET`, and `FEDEX_ACCOUNT_NUMBER` are set. Verify `FEDEX_BASE_URL` points to the correct environment (sandbox vs production).
+- **Quote cache**: identical `(origin, destination, dropOffDate, expectedDeliveryDate, weight-bucket-kg, items)` tuples served within `shipsmart.quote-cache.ttl-seconds` hit the in-process LRU and skip the carrier fanout entirely. Clear it by restarting the service; the cache is not distributed.
+- **Provider priority**: `QuoteProvider#priority()` (lower = earlier) controls fanout order. FedEx overrides to `10` so real-time carrier calls dispatch before mocks. Startup logs the full list: `carrier=ENABLED@p<priority>`.
 - **Migrations**: SQL migrations live in `supabase/migrations/` at the repo root and are applied via `supabase db push`. The Java service does **not** run Flyway/Liquibase — schema is owned by Supabase migrations.
