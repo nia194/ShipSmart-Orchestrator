@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/v1/saved-options/**").authenticated()
                         .requestMatchers("/api/v1/shipments/**").authenticated()
+                        .requestMatchers("/api/v1/providers/**").authenticated()
                         .anyRequest().denyAll()
                 )
                 .exceptionHandling(ex -> ex
