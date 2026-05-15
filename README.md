@@ -1,11 +1,72 @@
-# ShipSmart Orchestrator — Spring Boot API
+# ShipSmart — Orchestrator (Java / Spring Boot API)
 
-Core transactional backend for the ShipSmart shipping platform. Owns
-quotes, saved options, booking redirects, and shipment requests.
-Single writer to the Supabase Postgres database.
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.4-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot) [![Java](https://img.shields.io/badge/Java-17-007396?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/17/) [![Gradle](https://img.shields.io/badge/Gradle-8.12-02303A?logo=gradle&logoColor=white)](https://gradle.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?logo=postgresql&logoColor=white)](https://supabase.com/) [![Flyway](https://img.shields.io/badge/Flyway-Validate%20Mode-CC0200?logo=flyway&logoColor=white)](https://flywaydb.org/) [![Deploy: Render](https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/) [![License](https://img.shields.io/badge/License-See%20LICENSE-blue)](/nia194/ShipSmart-Orchestrator/blob/main/LICENSE)
+
+Core transactional backend for the ShipSmart shipping platform. Owns quotes, saved options, booking redirects, and shipment requests. **Single writer to the Supabase Postgres database** — every other service reads through this one.
 
 **Stack:** Spring Boot 3.4.4 · Java 17 · Gradle 8.12 · Spring Data JPA · PostgreSQL · Flyway (validate-mode) · Caffeine cache · Bucket4j rate limiting · Spring Security · Spring AOP · Micrometer + OpenTelemetry · SpringDoc OpenAPI · Supabase JWT (HS256)
 
+---
+
+## Table of contents
+
+- [The ShipSmart ecosystem](#the-shipsmart-ecosystem)
+- [What this service owns](#what-this-service-owns)
+- [Architecture inside this service](#architecture-inside-this-service)
+- [Key packages](#key-packages)
+- [Running locally](#running-locally)
+- [Configuration reference](#configuration-reference)
+- [Auth](#auth)
+- [Deployment (Render)](#deployment-render)
+- [Cross-service contract](#cross-service-contract)
+- [Tests](#tests)
+- [Operational notes](#operational-notes)
+- [License](#license)
+
+---
+
+## The ShipSmart ecosystem
+
+This service is one of five sibling repositories. Clone them as siblings of this directory when working on the full system.
+
+| Repo | Role | Stack |
+|------|------|-------|
+| [ShipSmart-Web](https://github.com/nia194/ShipSmart-Web) | React SPA — user-facing UI | React 19, Vite, TypeScript |
+| **[ShipSmart-Orchestrator](https://github.com/nia194/ShipSmart-Orchestrator)** _(this repo)_ | Java transactional API — **single writer** to Supabase Postgres; quotes, bookings, saved options, carrier integration | Spring Boot 3.4, Java 17 |
+| [ShipSmart-API](https://github.com/nia194/ShipSmart-API) | Python AI/orchestration service — RAG, advisors, recommendations | FastAPI, Python 3.13 |
+| [ShipSmart-MCP](https://github.com/nia194/ShipSmart-MCP) | MCP tool server — `validate_address`, `get_quote_preview` (provider-pluggable) | FastAPI + MCP |
+| [ShipSmart-Infra](https://github.com/nia194/ShipSmart-Infra) | Supabase migrations + edge functions, deployment configs, docs | Supabase, Render blueprints |
+
+```
+            ┌──────────────────────────────┐
+            │       ShipSmart-Web          │
+            │       React SPA · Vite       │
+            └──────────────┬───────────────┘
+                           │  Authorization: Bearer <Supabase JWT>
+              ┌────────────┴────────────┐
+              ▼                         ▼
+┌──────────────────────────────┐   ┌──────────────────────────────┐
+│  ShipSmart-Orchestrator      │◀──│        ShipSmart-API         │
+│  (this repo)                 │   │       Python / FastAPI       │
+│  Java / Spring Boot          │   │   RAG · advisors · recs      │
+│  Sole writer to Postgres     │   │   Forwards JWT to Java for   │
+│  Carrier integration (FedEx) │   │   quote hydration            │
+└──────────────┬───────────────┘   └──────────────┬───────────────┘
+               │                                  │
+               │              ┌───────────────────┘
+               │              ▼
+               │   ┌──────────────────────────────┐
+               │   │        ShipSmart-MCP         │
+               │   │   shipping tools (HTTP/MCP)  │
+               │   │   validate_address, quotes   │
+               │   └──────────────────────────────┘
+               ▼
+┌──────────────────────────────┐
+│   Supabase Postgres + Auth   │
+└──────────────────────────────┘
+```
+
+**This service is the only writer to Postgres.** The Python service reads from it over internal HTTP for recommendation hydration; it never touches the database directly. Migrations live in [ShipSmart-Infra](https://github.com/nia194/ShipSmart-Infra) and are mirrored here for Flyway validation at boot.
 
 ---
 
@@ -24,10 +85,6 @@ Single writer to the Supabase Postgres database.
 | Health | `GET /health`, `GET /api/v1/health`, `/actuator/health` | Root-level + prefixed liveness + Spring Actuator probes. |
 | Actuator | `/actuator/info`, `/actuator/metrics`, `/actuator/caches`, `/actuator/prometheus` | Operational telemetry; Prometheus scrape endpoint exposed for ops. |
 | API docs | `/swagger-ui.html`, `/v3/api-docs` | SpringDoc-generated OpenAPI 3 spec + Swagger UI. |
-
-This is the **only** service that writes to Postgres. The Python service reads
-from it via internal HTTP for recommendation hydration; it never touches the
-DB directly.
 
 ---
 
@@ -57,7 +114,23 @@ HTTP request
           └─► DTO mapping → JSON response (ETag on shipment reads/writes)
 ```
 
-### Key packages
+### Cross-cutting concerns at a glance
+
+| Concern | Mechanism | Where it lives |
+|---|---|---|
+| Authentication | Supabase HS256 JWT verified per request | `JwtAuthFilter`, `SupabaseJwtVerifier` |
+| Correlation / tracing | `X-Request-Id` + W3C `traceparent`; MDC-aware executors | `CorrelationIdFilter`, `ExecutorConfig` |
+| Rate limiting | Bucket4j per-IP buckets, in-memory | `RateLimitFilter` |
+| Idempotency | `Idempotency-Key` replay via `idempotency_keys` table | `IdempotencyInterceptor`, `@Idempotent`, `IdempotencyCleanupJob` |
+| Optimistic concurrency | JPA `@Version` exposed as `ETag` / `If-Match` | `BaseEntity`, shipment controller/service |
+| Audit trail | AOP `@Audited` → async write to `audit_log` | `AuditAspect`, `audit` executor pool |
+| Carrier fanout | Priority-sorted provider registry, parallel calls | `QuoteProviderRegistry`, `quote-provider` executor pool |
+| Observability | Micrometer + OpenTelemetry; Prometheus scrape | `/actuator/prometheus`, `MANAGEMENT_OTLP_TRACING_ENDPOINT` |
+| Schema safety | Flyway in validate mode; pending migrations are fatal at boot | `FlywayValidationRunner` |
+
+---
+
+## Key packages
 
 | Path | Purpose |
 |---|---|
@@ -85,7 +158,8 @@ HTTP request
 ### Prerequisites
 
 - **Java 17+** (LTS). The toolchain is set to 17 in `build.gradle`.
-- **Gradle 8.12** via the wrapper (`./gradlew`).
+- **Gradle 8.12** via the wrapper (`./gradlew`) — no host install required.
+- **Docker** (optional, but required to run the Testcontainers-backed repository integration tests).
 
 ### Configure
 
@@ -93,8 +167,7 @@ HTTP request
 cp .env.example .env
 ```
 
-
-Required env vars (see `.env.example`):
+Required environment variables (see [`.env.example`](./.env.example)):
 
 ```env
 SERVER_PORT=8080
@@ -131,34 +204,9 @@ Supabase values come from the Supabase dashboard:
 - **Settings → Database** — connection user/password
 - **Settings → API** — service-role key, JWT secret
 
-FedEx values come from the [FedEx Developer Portal](https://developer.fedex.com/).
+FedEx credentials come from the [FedEx Developer Portal](https://developer.fedex.com/).
 
-Without the database variables the service will fail to start. Without
-`SUPABASE_JWT_SECRET`, authenticated requests will be rejected.
-
-### Optional tuning
-
-These have sensible defaults — override via env / `application.yml` if you need to.
-
-| Property | Default | Purpose |
-|---|---|---|
-| `shipsmart.quote-cache.max-entries` | `256` | LRU cap on cached fanout responses (legacy in-memory `QuoteCache`). |
-| `shipsmart.quote-cache.ttl-seconds` | `120` | Cached-response freshness window (legacy `QuoteCache`). |
-| `shipsmart.provider-metrics.recent-events` | `50` | Ring-buffer size for `GET /api/v1/providers/metrics/{carrier}/recent`. |
-| `shipsmart.cache.quotes-ttl` | `PT10M` | Caffeine TTL for `quotesByShipmentId` (Spring `CacheManager`). |
-| `shipsmart.cache.shipment-ttl` | `PT2M` | Caffeine TTL for `shipmentById`. |
-| `shipsmart.rate-limit.enabled` | `true` | Master switch for the Bucket4j per-IP rate limiter. |
-| `shipsmart.rate-limit.shipments-per-minute` | `20` | Per-IP cap for `/api/v1/shipments` writes. |
-| `shipsmart.rate-limit.quotes-per-minute` | `30` | Per-IP cap for `/api/v1/quotes`. |
-| `shipsmart.rate-limit.bookings-per-minute` | `10` | Per-IP cap for `/api/v1/bookings/redirect`. |
-| `shipsmart.idempotency.enabled` | `true` | Honour `Idempotency-Key` on `@Idempotent` endpoints (POST /shipments, POST /bookings/redirect). |
-| `shipsmart.idempotency.ttl-hours` | `24` | Retention for stored idempotency responses; `IdempotencyCleanupJob` sweeps expired rows. |
-| `shipsmart.executor.quote-provider.{core-pool-size,max-pool-size,queue-capacity}` | `4 / 8 / 100` | Thread pool used to fan provider quotes out in parallel. |
-| `shipsmart.executor.audit.{core-pool-size,max-pool-size,queue-capacity}` | `2 / 2 / 500` | Thread pool used by `AuditAspect` for async `audit_log` writes. |
-| `SPRING_FLYWAY_ENABLED` | `true` | Toggle Flyway (validate-mode) at boot. Disable only for ad-hoc local runs against a non-Postgres DB. |
-| `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | `0.0` | OpenTelemetry trace sampling rate. Bump to `1.0` for full sampling in dev. |
-| `MANAGEMENT_OTLP_TRACING_ENDPOINT` | *(unset)* | OTLP collector endpoint; leave unset to keep the exporter off. |
-
+> **Heads-up:** without the database variables the service will fail to start. Without `SUPABASE_JWT_SECRET`, every authenticated request will be rejected with `401`.
 
 ### Run
 
@@ -173,6 +221,8 @@ curl http://localhost:8080/api/v1/health
 curl http://localhost:8080/actuator/health
 ```
 
+Browse the live OpenAPI spec at `http://localhost:8080/swagger-ui.html`.
+
 ### Build a JAR
 
 ```bash
@@ -182,25 +232,44 @@ java -jar build/libs/shipsmart-api-java-0.1.0-SNAPSHOT.jar
 
 ---
 
-## Auth
+## Configuration reference
 
-Frontend obtains a Supabase access token (HS256) and sends it as
-`Authorization: Bearer <token>`. `JwtAuthFilter` validates the
-signature using `SUPABASE_JWT_SECRET`, extracts `sub` as the user ID,
-and populates `SecurityContextHolder` for downstream controllers.
+These have sensible defaults — override via env or `application.yml` only when you need to.
 
-The Python service reuses this same token when calling Java internally
-(e.g., for recommendation hydration), so user-scoped queries continue
-to work.
+| Property | Default | Purpose |
+|---|---|---|
+| `shipsmart.quote-cache.max-entries` | `256` | LRU cap on cached fanout responses (legacy in-memory `QuoteCache`). |
+| `shipsmart.quote-cache.ttl-seconds` | `120` | Cached-response freshness window (legacy `QuoteCache`). |
+| `shipsmart.provider-metrics.recent-events` | `50` | Ring-buffer size for `GET /api/v1/providers/metrics/{carrier}/recent`. |
+| `shipsmart.cache.quotes-ttl` | `PT10M` | Caffeine TTL for `quotesByShipmentId` (Spring `CacheManager`). |
+| `shipsmart.cache.shipment-ttl` | `PT2M` | Caffeine TTL for `shipmentById`. |
+| `shipsmart.rate-limit.enabled` | `true` | Master switch for the Bucket4j per-IP rate limiter. |
+| `shipsmart.rate-limit.shipments-per-minute` | `20` | Per-IP cap for `/api/v1/shipments` writes. |
+| `shipsmart.rate-limit.quotes-per-minute` | `30` | Per-IP cap for `/api/v1/quotes`. |
+| `shipsmart.rate-limit.bookings-per-minute` | `10` | Per-IP cap for `/api/v1/bookings/redirect`. |
+| `shipsmart.idempotency.enabled` | `true` | Honour `Idempotency-Key` on `@Idempotent` endpoints (POST `/shipments`, POST `/bookings/redirect`). |
+| `shipsmart.idempotency.ttl-hours` | `24` | Retention for stored idempotency responses; `IdempotencyCleanupJob` sweeps expired rows. |
+| `shipsmart.executor.quote-provider.{core-pool-size,max-pool-size,queue-capacity}` | `4 / 8 / 100` | Thread pool used to fan provider quotes out in parallel. |
+| `shipsmart.executor.audit.{core-pool-size,max-pool-size,queue-capacity}` | `2 / 2 / 500` | Thread pool used by `AuditAspect` for async `audit_log` writes. |
+| `SPRING_FLYWAY_ENABLED` | `true` | Toggle Flyway (validate-mode) at boot. Disable only for ad-hoc local runs against a non-Postgres DB. |
+| `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | `0.0` | OpenTelemetry trace sampling rate. Bump to `1.0` for full sampling in dev. |
+| `MANAGEMENT_OTLP_TRACING_ENDPOINT` | *(unset)* | OTLP collector endpoint; leave unset to keep the exporter off. |
 
 ---
 
+## Auth
 
-## Deployment
+The frontend obtains a Supabase access token (HS256) and sends it as `Authorization: Bearer <token>`. `JwtAuthFilter` validates the signature using `SUPABASE_JWT_SECRET`, extracts `sub` as the user ID, and populates `SecurityContextHolder` for downstream controllers.
 
-Deployed to **Render** via `render.yaml`. The production profile
-(`application-production.yml`) enforces `REQUIRE_JWT_SECRET=true` and
-tightens logging.
+The Python service **reuses the same token** when calling Java internally (e.g., for recommendation hydration), so user-scoped queries continue to work without re-issuing credentials. There is no separate service-to-service token.
+
+Endpoints under `/actuator/**`, `/health`, `/api/v1/health`, `/swagger-ui/**`, and `/v3/api-docs/**` are public; everything else is JWT-gated.
+
+---
+
+## Deployment (Render)
+
+Deployed to **Render** via [`render.yaml`](./render.yaml). The production profile (`application-production.yml`) enforces `REQUIRE_JWT_SECRET=true` and tightens logging.
 
 ```bash
 # Build command (Render)
@@ -210,8 +279,9 @@ tightens logging.
 java -jar build/libs/shipsmart-api-java-0.1.0-SNAPSHOT.jar
 ```
 
-Set all secrets (database, Supabase, FedEx) in the Render dashboard —
-they are marked `sync: false` in `render.yaml` and must never be committed.
+Set all secrets (database, Supabase, FedEx) in the Render dashboard — they are marked `sync: false` in `render.yaml` and must never be committed.
+
+The companion blueprints for the other services live in [ShipSmart-Infra](https://github.com/nia194/ShipSmart-Infra); deploy them together when promoting a release.
 
 ---
 
@@ -220,19 +290,20 @@ they are marked `sync: false` in `render.yaml` and must never be committed.
 | Caller | Endpoint | Used by |
 |---|---|---|
 | Frontend → Java | `GET/POST/PATCH/DELETE /api/v1/shipments` | Shipment dashboard. POST sends `Idempotency-Key`; PATCH sends `If-Match` from the prior `ETag`. |
-| Frontend → Java | `POST /api/v1/quotes` | Quote comparison page |
-| Frontend → Java | `GET/POST/DELETE /api/v1/saved-options` | Saved options page |
+| Frontend → Java | `POST /api/v1/quotes` | Quote comparison page. |
+| Frontend → Java | `GET/POST/DELETE /api/v1/saved-options` | Saved options page. |
 | Frontend → Java | `GET /api/v1/saved-options/analytics` | Saved-options analytics widgets (per-user groupings, top-priced, route-frequency buckets). |
-| Frontend → Java | `POST /api/v1/bookings/redirect` | Booking flow |
+| Frontend → Java | `POST /api/v1/bookings/redirect` | Booking flow. |
 | Ops → Java | `GET /api/v1/providers`, `/api/v1/providers/metrics`, `/metrics/{carrier}/recent` | Carrier fanout observability — priority, enabled flag, per-outcome counters, last-N events. |
-| **Python → Java** | `GET /api/v1/quotes?shipmentRequestId=…` | Recommendation hydration when frontend posts only `shipment_request_id` |
-| **Python → Java** | `GET /api/v1/saved-options` | Reserved for future advisor enrichment |
-| **Java → MCP** | `POST /tools/list`, `POST /tools/call` | Reserved for upcoming AI-assist features. Config is wired via `shipsmart.mcp.base-url` / `SHIPSMART_MCP_URL`; no runtime call sites yet. See [`docs/mcp-integration.md`](docs/mcp-integration.md). |
+| **Python → Java** | `GET /api/v1/quotes?shipmentRequestId=…` | Recommendation hydration when the frontend posts only `shipment_request_id`. |
+| **Python → Java** | `GET /api/v1/saved-options` | Reserved for future advisor enrichment. |
+| **Java → MCP** | `POST /tools/list`, `POST /tools/call` | Reserved for upcoming AI-assist features. Wired via `shipsmart.mcp.base-url` / `SHIPSMART_MCP_URL`; no runtime call sites yet. See [`docs/mcp-integration.md`](docs/mcp-integration.md). |
 
-When changing any of the contracts above, update both
-`ShipSmart-API/app/services/java_client.py` and the frontend's
-`ShipSmart-Web/src/lib/*-api.ts` modules. For the MCP contract, the
-source of truth lives in the **ShipSmart-MCP** repo.
+When changing any of the contracts above, update them in lockstep:
+
+- **Java DTOs** ↔ **Python client** in `ShipSmart-API/app/services/java_client.py`
+- **Java DTOs** ↔ **Frontend types** in `ShipSmart-Web/src/lib/*-api.ts` and `ShipSmart-Web/src/shared/types/`
+- **MCP contract** — source of truth lives in the [ShipSmart-MCP](https://github.com/nia194/ShipSmart-MCP) repo
 
 ---
 
@@ -242,32 +313,49 @@ source of truth lives in the **ShipSmart-MCP** repo.
 ./gradlew test
 ```
 
+**69 tests across 14 files** — JUnit 5 with Spring Boot Test, plus Awaitility for async assertions. Most tests run on H2 in-memory with PostgreSQL compatibility mode; repository integration tests (e.g. `ShipmentRequestRepositoryIT`) run against real Postgres via **Testcontainers** (`spring-boot-testcontainers`, `testcontainers:postgresql`), so Docker must be available locally to run the full suite.
 
-69 tests across 14 files — JUnit 5 with Spring Boot Test, plus
-Awaitility for async assertions. Most tests use H2 in-memory with
-PostgreSQL compatibility mode; repository integration tests
-(e.g. `ShipmentRequestRepositoryIT`) run against real Postgres via
-**Testcontainers** (`spring-boot-testcontainers`,
-`testcontainers:postgresql`), so Docker must be available locally
-to run the full suite.
+Run a single test class:
 
+```bash
+./gradlew test --tests "com.shipsmart.api.service.QuoteServiceTest"
+```
 
 ---
 
 ## Operational notes
 
-- **Startup hangs / `Failed to determine driver class`**: `DATABASE_URL` is missing or malformed.
-- **All requests 401**: `SUPABASE_JWT_SECRET` is wrong (must match the project's signing secret exactly).
-- **CORS blocked from frontend**: add the frontend origin to `CORS_ALLOWED_ORIGINS` (comma-separated).
+### Startup & boot
 
-- **FedEx quotes empty**: check `FEDEX_CLIENT_ID`, `FEDEX_CLIENT_SECRET`, and `FEDEX_ACCOUNT_NUMBER` are set. Verify `FEDEX_BASE_URL` points to the correct environment (sandbox vs production).
-- **Quote cache**: identical `(origin, destination, dropOffDate, expectedDeliveryDate, weight-bucket-kg, items)` tuples served within `shipsmart.quote-cache.ttl-seconds` hit the in-process LRU and skip the carrier fanout entirely. Clear it by restarting the service; the cache is not distributed.
-- **Provider priority**: `QuoteProvider#priority()` (lower = earlier) controls fanout order. FedEx overrides to `10` so real-time carrier calls dispatch before mocks. Startup logs the full list: `carrier=ENABLED@p<priority>`.
-- **Migrations**: Supabase remains the source of truth — migrations live in `ShipSmart-Infra/supabase/migrations/` and are applied via `supabase db push`. The Java service ships a **mirror** of those migrations under `src/main/resources/db/migration/` (`V1__baseline.sql`, `V2__interview_upgrade.sql`) and runs Flyway in **validate mode** (`spring.flyway.validate-on-migrate=true`, `baseline-on-migrate=true`). `FlywayValidationRunner` makes any pending migration **fatal at boot** and logs applied/total counts. Disable with `SPRING_FLYWAY_ENABLED=false` if running against a non-Postgres dev DB.
-- **Idempotency**: `POST /api/v1/shipments` and `POST /api/v1/bookings/redirect` require an `Idempotency-Key` request header. The first response is persisted to `idempotency_keys` and replayed verbatim for repeats within `shipsmart.idempotency.ttl-hours`. `IdempotencyCleanupJob` sweeps expired rows on a schedule.
-- **Optimistic concurrency**: shipment reads/writes return an `ETag` derived from the JPA `@Version` column. `PATCH /api/v1/shipments/{id}` honours `If-Match`; a stale value yields 409.
-- **Rate limiting**: Bucket4j per-IP, in-memory. Defaults: 20/min shipments, 30/min quotes, 10/min bookings (configurable). Overflow → 429 with a `RateLimitExceededException` body. Toggle off with `SHIPSMART_RATE_LIMIT_ENABLED=false`.
-- **Correlation IDs**: every request gets/echoes `X-Request-Id` and surfaces in the log pattern as `[requestId] [traceId] [userId]`. The `quote-provider` and `audit` executors are MDC-aware so async work keeps the same context.
-- **Audit log**: methods annotated `@Audited` are intercepted by `AuditAspect` and written to the `audit_log` table asynchronously through the dedicated `audit` thread pool. Failures here never propagate to the request.
-- **Observability**: Prometheus scrape at `/actuator/prometheus`; OpenTelemetry tracing is wired via Micrometer. The OTLP exporter is **off by default** (`MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.0`); flip the sampling probability and set `MANAGEMENT_OTLP_TRACING_ENDPOINT` to send spans to a collector.
-- **OpenAPI**: SpringDoc serves the spec at `/v3/api-docs` and Swagger UI at `/swagger-ui.html`.
+- **`Failed to determine driver class` / startup hangs:** `DATABASE_URL` is missing or malformed (must be a JDBC URL — `jdbc:postgresql://…`).
+- **Migrations:** Supabase remains the source of truth — migrations live in `ShipSmart-Infra/supabase/migrations/` and are applied via `supabase db push`. The Java service ships a **mirror** of those migrations under `src/main/resources/db/migration/` (`V1__baseline.sql`, `V2__interview_upgrade.sql`) and runs Flyway in **validate mode** (`spring.flyway.validate-on-migrate=true`, `baseline-on-migrate=true`). `FlywayValidationRunner` makes any pending migration **fatal at boot** and logs applied/total counts. Disable with `SPRING_FLYWAY_ENABLED=false` only when running against a non-Postgres dev DB.
+
+### Auth & CORS
+
+- **All requests `401`:** `SUPABASE_JWT_SECRET` is wrong — it must match the project's signing secret exactly (Supabase dashboard → Settings → API).
+- **CORS blocked from frontend:** add the frontend origin to `CORS_ALLOWED_ORIGINS` (comma-separated).
+
+### Carrier integration
+
+- **FedEx quotes empty:** check `FEDEX_CLIENT_ID`, `FEDEX_CLIENT_SECRET`, and `FEDEX_ACCOUNT_NUMBER` are set. Verify `FEDEX_BASE_URL` points to the correct environment (sandbox vs production).
+- **Provider priority:** `QuoteProvider#priority()` (lower = earlier) controls fanout order. FedEx overrides to `10` so real-time carrier calls dispatch before mocks. Startup logs the full list: `carrier=ENABLED@p<priority>`.
+- **Quote cache:** identical `(origin, destination, dropOffDate, expectedDeliveryDate, weight-bucket-kg, items)` tuples served within `shipsmart.quote-cache.ttl-seconds` hit the in-process LRU and skip the carrier fanout entirely. Clear it by restarting the service — the cache is not distributed.
+
+### Request lifecycle guarantees
+
+- **Idempotency:** `POST /api/v1/shipments` and `POST /api/v1/bookings/redirect` require an `Idempotency-Key` request header. The first response is persisted to `idempotency_keys` and replayed verbatim for repeats within `shipsmart.idempotency.ttl-hours`. `IdempotencyCleanupJob` sweeps expired rows on a schedule.
+- **Optimistic concurrency:** shipment reads/writes return an `ETag` derived from the JPA `@Version` column. `PATCH /api/v1/shipments/{id}` honours `If-Match`; a stale value yields `409 Conflict`.
+- **Rate limiting:** Bucket4j per-IP, in-memory. Defaults: 20/min shipments, 30/min quotes, 10/min bookings (configurable). Overflow → `429` with a `RateLimitExceededException` body. Toggle off with `SHIPSMART_RATE_LIMIT_ENABLED=false`.
+
+### Observability
+
+- **Correlation IDs:** every request gets/echoes `X-Request-Id` and surfaces in the log pattern as `[requestId] [traceId] [userId]`. The `quote-provider` and `audit` executors are MDC-aware so async work keeps the same context.
+- **Audit log:** methods annotated `@Audited` are intercepted by `AuditAspect` and written to the `audit_log` table asynchronously through the dedicated `audit` thread pool. Failures here never propagate to the request.
+- **Metrics & traces:** Prometheus scrape at `/actuator/prometheus`; OpenTelemetry tracing is wired via Micrometer. The OTLP exporter is **off by default** (`MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.0`) — flip the sampling probability and set `MANAGEMENT_OTLP_TRACING_ENDPOINT` to send spans to a collector.
+- **API spec:** SpringDoc serves the OpenAPI 3 document at `/v3/api-docs` and Swagger UI at `/swagger-ui.html`.
+
+---
+
+## License
+
+See [LICENSE](./LICENSE) for the full text. ShipSmart-Orchestrator is distributed under a proprietary license — © 2026 Nia. All rights reserved.
