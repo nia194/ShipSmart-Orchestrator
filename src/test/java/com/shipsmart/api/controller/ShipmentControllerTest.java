@@ -115,6 +115,23 @@ class ShipmentControllerTest {
                 .andExpect(jsonPath("$.title").exists());
     }
 
+    @Test
+    void get_otherUsersShipment_returns404() throws Exception {
+        // A shipment owned by another user must never be returned. The controller
+        // scopes the lookup to the authenticated JWT user, so the service is asked
+        // for (id, USER_ID); another user's row is "not found" from this caller.
+        UUID id = UUID.randomUUID();
+        when(shipmentService.getById(eq(id), eq(USER_ID)))
+                .thenThrow(new ResourceNotFoundException("Shipment", id.toString()));
+
+        mockMvc.perform(get("/api/v1/shipments/{id}", id).with(authentication(auth())))
+                .andExpect(status().isNotFound());
+
+        // Security contract: lookup is scoped to the caller's JWT id, never the
+        // path alone or another user — so ownership can't be bypassed via the URL.
+        verify(shipmentService).getById(id, USER_ID);
+    }
+
     // ── LIST ─────────────────────────────────────────────────────────────────
 
     @Test
