@@ -24,6 +24,18 @@ import java.util.UUID;
 
 import com.shipsmart.api.domain.ShipmentStatus;
 
+/**
+ * Shipment lifecycle endpoints. The {@code GET} endpoints below are the
+ * read-only, JWT-scoped "advisor context" surface that ShipSmart-API hydrates
+ * from (forwarding the caller's JWT) for the shipment-scoped advisor panel.
+ *
+ * <p><b>Boundary (system invariant):</b> this controller and
+ * {@link com.shipsmart.api.service.ShipmentService} are strictly transactional
+ * and Postgres-only. Nothing here calls the Python AI API, the MCP tool server,
+ * or any LLM for business logic, and money movement / bookings are never
+ * initiated by an AI path. Context flows Python &rarr; Java (read-only), never
+ * the reverse.
+ */
 @RestController
 @RequestMapping("/api/v1/shipments")
 @Tag(name = "Shipments", description = "Create, read, update, soft-delete user shipments")
