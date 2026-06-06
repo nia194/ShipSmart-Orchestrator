@@ -3,6 +3,7 @@ package com.shipsmart.api.cache;
 import com.shipsmart.api.provider.ProviderQuote;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -92,6 +93,11 @@ public class QuoteCache {
     private final Map<String, LongAdder> counters = new ConcurrentHashMap<>();
     private final LongAdder evictions = new LongAdder();
 
+    // Two constructors live here (this one + the package-private test ctor below),
+    // so Spring can't pick by itself — without an explicit @Autowired it falls back
+    // to looking for a no-arg default and fails the full-context boot with
+    // "No default constructor found". @Autowired names this as the injection point.
+    @Autowired
     public QuoteCache(
             @Value("${shipsmart.quote-cache.max-entries:256}") int maxEntries,
             @Value("${shipsmart.quote-cache.ttl-seconds:120}") long ttlSeconds) {
