@@ -313,13 +313,22 @@ When changing any of the contracts above, update them in lockstep:
 ./gradlew test
 ```
 
-**69 tests across 14 files** — JUnit 5 with Spring Boot Test, plus Awaitility for async assertions. Most tests run on H2 in-memory with PostgreSQL compatibility mode; repository integration tests (e.g. `ShipmentRequestRepositoryIT`) run against real Postgres via **Testcontainers** (`spring-boot-testcontainers`, `testcontainers:postgresql`), so Docker must be available locally to run the full suite.
+**84 tests across 17 classes** — JUnit 5 with Spring Boot Test (77 run, 7 skip). Most tests run on H2 in-memory with PostgreSQL compatibility mode; the repository integration test (`ShipmentRequestRepositoryIT`, 7 tests) runs against real Postgres via **Testcontainers** and **self-skips** when no Docker daemon is reachable, so the rest of the suite stays green on a laptop without Docker.
+
+Notable classes:
+
+- **`ShipSmartApiApplicationTests`** — a real `@SpringBootTest` full-context boot on the H2 test profile. This is the cheap guard for boot-time wiring regressions that `@WebMvcTest`/`@DataJpaTest` slices can't catch (e.g. a `@Component` with two constructors and no `@Autowired` hint — see *Startup & boot* below). It exercises the same bean graph the live `java -jar` boot does, without Docker.
+- **`QuoteCacheTest`** — LRU eviction + TTL staleness (via an injected `Clock`) + hit/miss/eviction counters.
+- **`QuoteFanoutServiceTest`** — the cache short-circuit, parallel provider merge + cache-fill, and canonical sorting (providers mocked).
+- **`SupabaseJwtVerifierTest`** — the HS256 path (valid / expired / wrong-secret / missing-sub) the local stack + ShipSmart-Test e2e rely on.
 
 Run a single test class:
 
 ```bash
 ./gradlew test --tests "com.shipsmart.api.service.QuoteServiceTest"
 ```
+
+> Build/run on **JDK 17** (the Gradle wrapper is 8.12). JDK 25 + wrapper 8.12 fails at `:test` task creation.
 
 ---
 
@@ -328,6 +337,7 @@ Run a single test class:
 ### Startup & boot
 
 - **`Failed to determine driver class` / startup hangs:** `DATABASE_URL` is missing or malformed (must be a JDBC URL — `jdbc:postgresql://…`).
+- **Full-context boot under `java -jar`:** the `local` profile sets `management.tracing.sampling.probability=1.0` but ships no OTLP endpoint — export `MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.0` (or a real `MANAGEMENT_OTLP_TRACING_ENDPOINT`) to avoid an "Invalid endpoint" exporter error. Every Spring `@Component` with more than one constructor must annotate its injection constructor with `@Autowired` (e.g. `QuoteCache`), otherwise the full context fails with *"No default constructor found"* — the `@SpringBootTest` in `ShipSmartApiApplicationTests` now guards this in CI. Both are exercised end-to-end by `ShipSmart-Test`'s live Java e2e.
 - **Migrations:** Supabase remains the source of truth — migrations live in `ShipSmart-Infra/supabase/migrations/` and are applied via `supabase db push`. The Java service ships a **mirror** of those migrations under `src/main/resources/db/migration/` (`V1__baseline.sql`, `V2__interview_upgrade.sql`) and runs Flyway in **validate mode** (`spring.flyway.validate-on-migrate=true`, `baseline-on-migrate=true`). `FlywayValidationRunner` makes any pending migration **fatal at boot** and logs applied/total counts. Disable with `SPRING_FLYWAY_ENABLED=false` only when running against a non-Postgres dev DB.
 
 ### Auth & CORS
