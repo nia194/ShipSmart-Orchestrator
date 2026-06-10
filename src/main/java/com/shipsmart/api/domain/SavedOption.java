@@ -1,16 +1,15 @@
 package com.shipsmart.api.domain;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
- * JPA entity for the {@code saved_options} table.
- * Schema defined in {@code supabase/migrations/20260404030225_*.sql}.
+ * JPA entity for the {@code saved_options} table. Schema defined in {@code
+ * supabase/migrations/20260404030225_*.sql}.
  */
 @Entity
 @Table(name = "saved_options")
@@ -51,8 +50,7 @@ public class SavedOption extends BaseEntity {
     @Column(name = "deliver_by_time")
     private String deliverByTime;
 
-    @Column
-    private boolean guaranteed;
+    @Column private boolean guaranteed;
 
     /** JSONB column — stored as raw JSON string. */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -99,73 +97,187 @@ public class SavedOption extends BaseEntity {
 
     // ── Getters / Setters ─────────────────────────────────────────────────
 
-    public UUID getId() { return id; }
+    public UUID getId() {
+        return id;
+    }
 
-    public UUID getUserId() { return userId; }
-    public void setUserId(UUID userId) { this.userId = userId; }
+    public UUID getUserId() {
+        return userId;
+    }
 
-    public String getQuoteServiceId() { return quoteServiceId; }
-    public void setQuoteServiceId(String quoteServiceId) { this.quoteServiceId = quoteServiceId; }
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
 
-    public String getCarrier() { return carrier; }
-    public void setCarrier(String carrier) { this.carrier = carrier; }
+    public String getQuoteServiceId() {
+        return quoteServiceId;
+    }
 
-    public String getServiceName() { return serviceName; }
-    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+    public void setQuoteServiceId(String quoteServiceId) {
+        this.quoteServiceId = quoteServiceId;
+    }
 
-    public String getTier() { return tier; }
-    public void setTier(String tier) { this.tier = tier; }
+    public String getCarrier() {
+        return carrier;
+    }
 
-    public BigDecimal getPrice() { return price; }
-    public void setPrice(BigDecimal price) { this.price = price; }
+    public void setCarrier(String carrier) {
+        this.carrier = carrier;
+    }
 
-    public BigDecimal getOriginalPrice() { return originalPrice; }
-    public void setOriginalPrice(BigDecimal originalPrice) { this.originalPrice = originalPrice; }
+    public String getServiceName() {
+        return serviceName;
+    }
 
-    public int getTransitDays() { return transitDays; }
-    public void setTransitDays(int transitDays) { this.transitDays = transitDays; }
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
 
-    public String getEstimatedDelivery() { return estimatedDelivery; }
-    public void setEstimatedDelivery(String estimatedDelivery) { this.estimatedDelivery = estimatedDelivery; }
+    public String getTier() {
+        return tier;
+    }
 
-    public String getDeliverByTime() { return deliverByTime; }
-    public void setDeliverByTime(String deliverByTime) { this.deliverByTime = deliverByTime; }
+    public void setTier(String tier) {
+        this.tier = tier;
+    }
 
-    public boolean isGuaranteed() { return guaranteed; }
-    public void setGuaranteed(boolean guaranteed) { this.guaranteed = guaranteed; }
+    public BigDecimal getPrice() {
+        return price;
+    }
 
-    public String getPromo() { return promo; }
-    public void setPromo(String promo) { this.promo = promo; }
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
 
-    public String getAiRecommendation() { return aiRecommendation; }
-    public void setAiRecommendation(String aiRecommendation) { this.aiRecommendation = aiRecommendation; }
+    public BigDecimal getOriginalPrice() {
+        return originalPrice;
+    }
 
-    public String getBreakdown() { return breakdown; }
-    public void setBreakdown(String breakdown) { this.breakdown = breakdown; }
+    public void setOriginalPrice(BigDecimal originalPrice) {
+        this.originalPrice = originalPrice;
+    }
 
-    public String getDetails() { return details; }
-    public void setDetails(String details) { this.details = details; }
+    public int getTransitDays() {
+        return transitDays;
+    }
 
-    public String[] getFeatures() { return features; }
-    public void setFeatures(String[] features) { this.features = features; }
+    public void setTransitDays(int transitDays) {
+        this.transitDays = transitDays;
+    }
 
-    public String getOrigin() { return origin; }
-    public void setOrigin(String origin) { this.origin = origin; }
+    public String getEstimatedDelivery() {
+        return estimatedDelivery;
+    }
 
-    public String getDestination() { return destination; }
-    public void setDestination(String destination) { this.destination = destination; }
+    public void setEstimatedDelivery(String estimatedDelivery) {
+        this.estimatedDelivery = estimatedDelivery;
+    }
 
-    public String getDropOffDate() { return dropOffDate; }
-    public void setDropOffDate(String dropOffDate) { this.dropOffDate = dropOffDate; }
+    public String getDeliverByTime() {
+        return deliverByTime;
+    }
 
-    public String getExpectedDeliveryDate() { return expectedDeliveryDate; }
-    public void setExpectedDeliveryDate(String expectedDeliveryDate) { this.expectedDeliveryDate = expectedDeliveryDate; }
+    public void setDeliverByTime(String deliverByTime) {
+        this.deliverByTime = deliverByTime;
+    }
 
-    public String getPackageSummary() { return packageSummary; }
-    public void setPackageSummary(String packageSummary) { this.packageSummary = packageSummary; }
+    public boolean isGuaranteed() {
+        return guaranteed;
+    }
 
-    public String getBookUrl() { return bookUrl; }
-    public void setBookUrl(String bookUrl) { this.bookUrl = bookUrl; }
+    public void setGuaranteed(boolean guaranteed) {
+        this.guaranteed = guaranteed;
+    }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public String getPromo() {
+        return promo;
+    }
+
+    public void setPromo(String promo) {
+        this.promo = promo;
+    }
+
+    public String getAiRecommendation() {
+        return aiRecommendation;
+    }
+
+    public void setAiRecommendation(String aiRecommendation) {
+        this.aiRecommendation = aiRecommendation;
+    }
+
+    public String getBreakdown() {
+        return breakdown;
+    }
+
+    public void setBreakdown(String breakdown) {
+        this.breakdown = breakdown;
+    }
+
+    public String getDetails() {
+        return details;
+    }
+
+    public void setDetails(String details) {
+        this.details = details;
+    }
+
+    public String[] getFeatures() {
+        return features;
+    }
+
+    public void setFeatures(String[] features) {
+        this.features = features;
+    }
+
+    public String getOrigin() {
+        return origin;
+    }
+
+    public void setOrigin(String origin) {
+        this.origin = origin;
+    }
+
+    public String getDestination() {
+        return destination;
+    }
+
+    public void setDestination(String destination) {
+        this.destination = destination;
+    }
+
+    public String getDropOffDate() {
+        return dropOffDate;
+    }
+
+    public void setDropOffDate(String dropOffDate) {
+        this.dropOffDate = dropOffDate;
+    }
+
+    public String getExpectedDeliveryDate() {
+        return expectedDeliveryDate;
+    }
+
+    public void setExpectedDeliveryDate(String expectedDeliveryDate) {
+        this.expectedDeliveryDate = expectedDeliveryDate;
+    }
+
+    public String getPackageSummary() {
+        return packageSummary;
+    }
+
+    public void setPackageSummary(String packageSummary) {
+        this.packageSummary = packageSummary;
+    }
+
+    public String getBookUrl() {
+        return bookUrl;
+    }
+
+    public void setBookUrl(String bookUrl) {
+        this.bookUrl = bookUrl;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

@@ -1,9 +1,15 @@
 package com.shipsmart.api.service;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import com.shipsmart.api.domain.RedirectTracking;
 import com.shipsmart.api.dto.BookingRedirectRequest;
 import com.shipsmart.api.dto.BookingRedirectResponse;
 import com.shipsmart.api.repository.RedirectTrackingRepository;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,18 +17,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class BookingServiceTest {
 
-    @Mock
-    private RedirectTrackingRepository repository;
+    @Mock private RedirectTrackingRepository repository;
 
     private BookingService service;
 
@@ -35,10 +33,14 @@ class BookingServiceTest {
 
     @Test
     void trackAndRedirect_returnsRedirectUrl() {
-        BookingRedirectRequest request = new BookingRedirectRequest(
-                "ups-ground", "UPS", "UPS® Ground",
-                "https://ups.com/checkout/abc", "New York, NY", "Los Angeles, CA"
-        );
+        BookingRedirectRequest request =
+                new BookingRedirectRequest(
+                        "ups-ground",
+                        "UPS",
+                        "UPS® Ground",
+                        "https://ups.com/checkout/abc",
+                        "New York, NY",
+                        "Los Angeles, CA");
         when(repository.save(any(RedirectTracking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         BookingRedirectResponse response = service.trackAndRedirect(Optional.of(USER_ID), request);
@@ -48,10 +50,14 @@ class BookingServiceTest {
 
     @Test
     void trackAndRedirect_persistsEntityWithUserId() {
-        BookingRedirectRequest request = new BookingRedirectRequest(
-                "fedex-express", "FedEx", "FedEx Express",
-                "https://fedex.com/ship", "Chicago, IL", "Miami, FL"
-        );
+        BookingRedirectRequest request =
+                new BookingRedirectRequest(
+                        "fedex-express",
+                        "FedEx",
+                        "FedEx Express",
+                        "https://fedex.com/ship",
+                        "Chicago, IL",
+                        "Miami, FL");
         when(repository.save(any(RedirectTracking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.trackAndRedirect(Optional.of(USER_ID), request);
@@ -70,10 +76,14 @@ class BookingServiceTest {
 
     @Test
     void trackAndRedirect_worksWithoutUserId() {
-        BookingRedirectRequest request = new BookingRedirectRequest(
-                "usps-priority", "USPS", "Priority Mail",
-                "https://usps.com/ship", null, null
-        );
+        BookingRedirectRequest request =
+                new BookingRedirectRequest(
+                        "usps-priority",
+                        "USPS",
+                        "Priority Mail",
+                        "https://usps.com/ship",
+                        null,
+                        null);
         when(repository.save(any(RedirectTracking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         BookingRedirectResponse response = service.trackAndRedirect(Optional.empty(), request);
@@ -87,10 +97,8 @@ class BookingServiceTest {
 
     @Test
     void trackAndRedirect_defaultsNullCarrierAndServiceName() {
-        BookingRedirectRequest request = new BookingRedirectRequest(
-                "svc-1", null, null,
-                "https://example.com", null, null
-        );
+        BookingRedirectRequest request =
+                new BookingRedirectRequest("svc-1", null, null, "https://example.com", null, null);
         when(repository.save(any(RedirectTracking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.trackAndRedirect(Optional.empty(), request);

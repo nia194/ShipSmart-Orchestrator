@@ -1,13 +1,16 @@
 package com.shipsmart.api.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.shipsmart.api.domain.ShipmentRequest;
 import com.shipsmart.api.domain.ShipmentStatus;
+import java.time.Instant;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.DockerClientFactory;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.ExecutionCondition;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -18,40 +21,39 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.Instant;
-import java.time.LocalDate;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Testcontainers-backed integration test for {@link ShipmentRequestRepository}.
  *
- * Exercises the interview-critical behaviours that unit tests can't:
- *   - JPA Specifications filtering (owner, status, createdAfter)
- *   - Soft-delete enforcement via {@code @SQLRestriction("deleted_at IS NULL")}
- *   - Native-query escape hatch ({@code findByIdIncludingDeleted}) that bypasses it
- *   - Pagination + sort on the composite spec
+ * <p>Exercises the interview-critical behaviours that unit tests can't: - JPA Specifications
+ * filtering (owner, status, createdAfter) - Soft-delete enforcement via
+ * {@code @SQLRestriction("deleted_at IS NULL")} - Native-query escape hatch ({@code
+ * findByIdIncludingDeleted}) that bypasses it - Pagination + sort on the composite spec
  *
- * Runs against real Postgres (not H2) so JSONB + UUID + timestamptz all behave
- * as they do in production.
+ * <p>Runs against real Postgres (not H2) so JSONB + UUID + timestamptz all behave as they do in
+ * production.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@TestPropertySource(properties = {
-        "spring.flyway.enabled=false",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect"
-})
+@TestPropertySource(
+        properties = {
+            "spring.flyway.enabled=false",
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect"
+        })
 @DirtiesContext
 @ExtendWith(ShipmentRequestRepositoryIT.DockerAvailable.class)
 class ShipmentRequestRepositoryIT {
 
-    /** Skip the whole class when no Docker daemon is reachable (e.g. CI without DinD, dev laptop with Docker Desktop down). */
+    /**
+     * Skip the whole class when no Docker daemon is reachable (e.g. CI without DinD, dev laptop
+     * with Docker Desktop down).
+     */
     static class DockerAvailable implements ExecutionCondition {
         @Override
         public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext ctx) {
@@ -60,13 +62,13 @@ class ShipmentRequestRepositoryIT {
                         ? ConditionEvaluationResult.enabled("Docker available")
                         : ConditionEvaluationResult.disabled("Docker not available");
             } catch (Throwable t) {
-                return ConditionEvaluationResult.disabled("Docker not available: " + t.getMessage());
+                return ConditionEvaluationResult.disabled(
+                        "Docker not available: " + t.getMessage());
             }
         }
     }
 
-    @Container
-    @ServiceConnection
+    @Container @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine").withReuse(true);
 
@@ -102,9 +104,10 @@ class ShipmentRequestRepositoryIT {
         repo.save(make(USER_A, ShipmentStatus.DRAFT, "10002"));
         repo.save(make(USER_B, ShipmentStatus.DRAFT, "20001"));
 
-        var page = repo.findAll(
-                Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
-                PageRequest.of(0, 10));
+        var page =
+                repo.findAll(
+                        Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
+                        PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent()).allMatch(s -> s.getUserId().equals(USER_A));
@@ -116,9 +119,9 @@ class ShipmentRequestRepositoryIT {
         repo.save(make(USER_A, ShipmentStatus.QUOTED, "10002"));
         repo.save(make(USER_A, ShipmentStatus.BOOKED, "10003"));
 
-        var spec = Specification
-                .where(ShipmentRequestSpecifications.ownedBy(USER_A))
-                .and(ShipmentRequestSpecifications.hasStatus(ShipmentStatus.QUOTED));
+        var spec =
+                Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A))
+                        .and(ShipmentRequestSpecifications.hasStatus(ShipmentStatus.QUOTED));
 
         var page = repo.findAll(spec, PageRequest.of(0, 10));
 
@@ -130,9 +133,9 @@ class ShipmentRequestRepositoryIT {
     void createdAfter_nullSpecIsNoOp() {
         repo.save(make(USER_A, ShipmentStatus.DRAFT, "10001"));
 
-        var spec = Specification
-                .where(ShipmentRequestSpecifications.ownedBy(USER_A))
-                .and(ShipmentRequestSpecifications.createdAfter(null));
+        var spec =
+                Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A))
+                        .and(ShipmentRequestSpecifications.createdAfter(null));
 
         assertThat(repo.findAll(spec, PageRequest.of(0, 10)).getTotalElements()).isEqualTo(1);
     }
@@ -145,9 +148,10 @@ class ShipmentRequestRepositoryIT {
             repo.save(make(USER_A, ShipmentStatus.DRAFT, "1000" + i));
         }
 
-        var page = repo.findAll(
-                Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
-                PageRequest.of(1, 10, Sort.by("origin")));
+        var page =
+                repo.findAll(
+                        Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
+                        PageRequest.of(1, 10, Sort.by("origin")));
 
         assertThat(page.getNumber()).isEqualTo(1);
         assertThat(page.getContent()).hasSize(10);
@@ -164,9 +168,10 @@ class ShipmentRequestRepositoryIT {
         deleted.setDeletedAt(Instant.now());
         repo.save(deleted);
 
-        var page = repo.findAll(
-                Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
-                PageRequest.of(0, 10));
+        var page =
+                repo.findAll(
+                        Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
+                        PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(1);
         assertThat(page.getContent().get(0).getId()).isEqualTo(live.getId());

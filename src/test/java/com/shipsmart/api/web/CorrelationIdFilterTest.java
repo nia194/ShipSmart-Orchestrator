@@ -1,13 +1,13 @@
 package com.shipsmart.api.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class CorrelationIdFilterTest {
 
@@ -16,11 +16,12 @@ class CorrelationIdFilterTest {
         CorrelationIdFilter filter = new CorrelationIdFilter();
         MockHttpServletRequest req = new MockHttpServletRequest();
         MockHttpServletResponse res = new MockHttpServletResponse();
-        FilterChain chain = (r, s) -> {
-            assertThat(MDC.get("requestId")).isNotBlank();
-            assertThat(MDC.get("traceId")).hasSize(32);
-            assertThat(MDC.get("spanId")).hasSize(16);
-        };
+        FilterChain chain =
+                (r, s) -> {
+                    assertThat(MDC.get("requestId")).isNotBlank();
+                    assertThat(MDC.get("traceId")).hasSize(32);
+                    assertThat(MDC.get("spanId")).hasSize(16);
+                };
 
         filter.doFilter(req, res, chain);
 

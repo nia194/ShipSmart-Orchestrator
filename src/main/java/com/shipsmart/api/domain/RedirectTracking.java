@@ -1,13 +1,12 @@
 package com.shipsmart.api.domain;
 
 import jakarta.persistence.*;
-
 import java.time.Instant;
 import java.util.UUID;
 
 /**
- * JPA entity for the {@code redirect_tracking} table.
- * Tracks when a user clicks "Book" on a shipping quote.
+ * JPA entity for the {@code redirect_tracking} table. Tracks when a user clicks "Book" on a
+ * shipping quote.
  */
 @Entity
 @Table(name = "redirect_tracking")
@@ -32,39 +31,76 @@ public class RedirectTracking {
     @Column(name = "redirect_url", nullable = false)
     private String redirectUrl;
 
-    @Column
-    private String origin;
+    @Column private String origin;
 
-    @Column
-    private String destination;
+    @Column private String destination;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 
     // ── Getters / Setters ─────────────────────────────────────────────────
 
-    public UUID getId() { return id; }
+    public UUID getId() {
+        return id;
+    }
 
-    public UUID getUserId() { return userId; }
-    public void setUserId(UUID userId) { this.userId = userId; }
+    public UUID getUserId() {
+        return userId;
+    }
 
-    public String getServiceId() { return serviceId; }
-    public void setServiceId(String serviceId) { this.serviceId = serviceId; }
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
 
-    public String getCarrier() { return carrier; }
-    public void setCarrier(String carrier) { this.carrier = carrier; }
+    public String getServiceId() {
+        return serviceId;
+    }
 
-    public String getServiceName() { return serviceName; }
-    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
+    }
 
-    public String getRedirectUrl() { return redirectUrl; }
-    public void setRedirectUrl(String redirectUrl) { this.redirectUrl = redirectUrl; }
+    public String getCarrier() {
+        return carrier;
+    }
 
-    public String getOrigin() { return origin; }
-    public void setOrigin(String origin) { this.origin = origin; }
+    public void setCarrier(String carrier) {
+        this.carrier = carrier;
+    }
 
-    public String getDestination() { return destination; }
-    public void setDestination(String destination) { this.destination = destination; }
+    public String getServiceName() {
+        return serviceName;
+    }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+    public String getRedirectUrl() {
+        return redirectUrl;
+    }
+
+    public void setRedirectUrl(String redirectUrl) {
+        this.redirectUrl = redirectUrl;
+    }
+
+    public String getOrigin() {
+        return origin;
+    }
+
+    public void setOrigin(String origin) {
+        this.origin = origin;
+    }
+
+    public String getDestination() {
+        return destination;
+    }
+
+    public void setDestination(String destination) {
+        this.destination = destination;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

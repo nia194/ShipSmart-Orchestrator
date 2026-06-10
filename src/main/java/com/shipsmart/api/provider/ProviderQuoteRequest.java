@@ -8,5 +8,4 @@ public record ProviderQuoteRequest(
         LocalDate dropOffDate,
         LocalDate expectedDeliveryDate,
         double totalWeight,
-        int totalItems
-) {}
+        int totalItems) {}

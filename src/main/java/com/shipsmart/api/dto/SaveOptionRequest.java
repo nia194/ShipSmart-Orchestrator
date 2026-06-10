@@ -4,13 +4,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
-
 import java.util.List;
-import java.util.Map;
 
 /**
- * Request body for POST /api/v1/saved-options.
- * Matches the payload sent by the frontend useSavedOptions hook.
+ * Request body for POST /api/v1/saved-options. Matches the payload sent by the frontend
+ * useSavedOptions hook.
  */
 public record SaveOptionRequest(
         @NotBlank @Size(max = 100) String quoteServiceId,
@@ -33,5 +31,4 @@ public record SaveOptionRequest(
         @Size(max = 50) String dropOffDate,
         @Size(max = 50) String expectedDeliveryDate,
         @Size(max = 500) String packageSummary,
-        @Size(max = 2000) String bookUrl
-) {}
+        @Size(max = 2000) String bookUrl) {}

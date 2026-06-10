@@ -1,11 +1,22 @@
 package com.shipsmart.api.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.shipsmart.api.cache.QuoteCache;
 import com.shipsmart.api.cache.QuoteCacheKey;
 import com.shipsmart.api.provider.ProviderQuote;
 import com.shipsmart.api.provider.ProviderQuoteRequest;
 import com.shipsmart.api.provider.QuoteProvider;
 import com.shipsmart.api.provider.QuoteProviderRegistry;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,24 +24,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 /**
- * Unit tests for {@link QuoteFanoutService}: the cache short-circuit, the
- * parallel provider merge + cache-fill on a miss, the no-providers degenerate
- * case, and canonical sorting. Providers + registry are mocked; the executor and
- * {@link QuoteCache} are real (the cache is deterministic with a system clock
- * because we never cross its TTL here).
+ * Unit tests for {@link QuoteFanoutService}: the cache short-circuit, the parallel provider merge +
+ * cache-fill on a miss, the no-providers degenerate case, and canonical sorting. Providers +
+ * registry are mocked; the executor and {@link QuoteCache} are real (the cache is deterministic
+ * with a system clock because we never cross its TTL here).
  */
 @ExtendWith(MockitoExtension.class)
 class QuoteFanoutServiceTest {
@@ -43,13 +41,14 @@ class QuoteFanoutServiceTest {
     private QuoteCache cache;
     private QuoteFanoutService service;
 
-    private static final ProviderQuoteRequest REQ = new ProviderQuoteRequest(
-            "10001", "90210", LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 7), 10.0, 1);
+    private static final ProviderQuoteRequest REQ =
+            new ProviderQuoteRequest(
+                    "10001", "90210", LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 7), 10.0, 1);
 
     @BeforeEach
     void setUp() {
         executor = Executors.newFixedThreadPool(2);
-        cache = new QuoteCache(64, 120L);   // public ctor: systemUTC clock, never crosses TTL here
+        cache = new QuoteCache(64, 120L); // public ctor: systemUTC clock, never crosses TTL here
         service = new QuoteFanoutService(registry, executor, cache);
     }
 
@@ -59,8 +58,8 @@ class QuoteFanoutServiceTest {
     }
 
     private static ProviderQuote quote(String carrier, String price, int days) {
-        return new ProviderQuote(carrier, carrier + " Service", "standard",
-                new BigDecimal(price), days, false);
+        return new ProviderQuote(
+                carrier, carrier + " Service", "standard", new BigDecimal(price), days, false);
     }
 
     @Test
@@ -70,7 +69,7 @@ class QuoteFanoutServiceTest {
         List<ProviderQuote> result = service.fanout(REQ);
 
         assertThat(result).hasSize(1);
-        verify(registry, never()).enabled();   // never dispatched to carriers
+        verify(registry, never()).enabled(); // never dispatched to carriers
     }
 
     @Test
@@ -82,11 +81,12 @@ class QuoteFanoutServiceTest {
         List<ProviderQuote> result = service.fanout(REQ);
 
         assertThat(result).hasSize(2);
-        assertThat(result).extracting(ProviderQuote::carrier)
+        assertThat(result)
+                .extracting(ProviderQuote::carrier)
                 .containsExactlyInAnyOrder("UPS", "FedEx");
         // The merged result is now cached: a second call must not re-dispatch.
         service.fanout(REQ);
-        verify(registry).enabled();             // exactly once across both calls
+        verify(registry).enabled(); // exactly once across both calls
     }
 
     @Test
@@ -103,7 +103,8 @@ class QuoteFanoutServiceTest {
 
         List<ProviderQuote> sorted = service.fanoutSorted(REQ, null);
 
-        assertThat(sorted).extracting(ProviderQuote::price)
+        assertThat(sorted)
+                .extracting(ProviderQuote::price)
                 .containsExactly(new BigDecimal("10.00"), new BigDecimal("25.00"));
     }
 }
