@@ -7,10 +7,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Health check endpoint.
- * Used by Render health checks and internal monitoring.
+ * Health check endpoint. Used by Render health checks and internal monitoring.
  *
- * GET /api/v1/health  →  200 OK  {"status":"ok", ...}
+ * <p>GET /api/v1/health → 200 OK {"status":"ok", ...}
  */
 @RestController
 @RequestMapping("/api/v1/health")

@@ -1,12 +1,6 @@
 package com.shipsmart.api.cache;
 
 import com.shipsmart.api.provider.ProviderQuote;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Collections;
@@ -17,27 +11,31 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * In-memory LRU cache for fanout results, keyed by {@link QuoteCacheKey}.
  *
  * <p>This class is an intentional survey of Collections Framework pieces:
+ *
  * <ul>
- *   <li><b>{@link LinkedHashMap} with {@code accessOrder=true}</b> + an
- *       overridden {@code removeEldestEntry} is the textbook LRU pattern.
- *       We wrap it in {@link Collections#synchronizedMap} so concurrent
- *       request threads can read/write safely (LinkedHashMap is not
- *       thread-safe, and its access-order mutation happens on reads too).</li>
- *   <li><b>{@link ConcurrentHashMap}</b> for the hit/miss counters — lock-free
- *       increment via {@link LongAdder}.</li>
- *   <li><b>{@link TreeMap}</b> (accessed via {@link NavigableMap}) to expose a
- *       sorted view of keys for the debug/analytics endpoints.</li>
+ *   <li><b>{@link LinkedHashMap} with {@code accessOrder=true}</b> + an overridden {@code
+ *       removeEldestEntry} is the textbook LRU pattern. We wrap it in {@link
+ *       Collections#synchronizedMap} so concurrent request threads can read/write safely
+ *       (LinkedHashMap is not thread-safe, and its access-order mutation happens on reads too).
+ *   <li><b>{@link ConcurrentHashMap}</b> for the hit/miss counters — lock-free increment via {@link
+ *       LongAdder}.
+ *   <li><b>{@link TreeMap}</b> (accessed via {@link NavigableMap}) to expose a sorted view of keys
+ *       for the debug/analytics endpoints.
  * </ul>
  *
- * <p>Complements, does not replace, Caffeine. Caffeine is the right tool
- * for production. This class exists to (a) cover collections concepts
- * end-to-end and (b) give us a place to hang domain-specific logic like
- * "reject cached entries older than X minutes."
+ * <p>Complements, does not replace, Caffeine. Caffeine is the right tool for production. This class
+ * exists to (a) cover collections concepts end-to-end and (b) give us a place to hang
+ * domain-specific logic like "reject cached entries older than X minutes."
  */
 @Component
 public class QuoteCache {
@@ -46,24 +44,25 @@ public class QuoteCache {
 
     /** Package-private so tests can swap in a fixed clock. */
     final Clock clock;
+
     private final int maxEntries;
     private final long ttlMillis;
 
     /**
-     * Inner (non-static) class: the eldest-entry eviction callback needs
-     * access to the enclosing {@code maxEntries}. Declaring it {@code static}
-     * is slightly more efficient (no synthetic outer-ref field) and is what
-     * a real production variant would use — we keep it non-static here
+     * Inner (non-static) class: the eldest-entry eviction callback needs access to the enclosing
+     * {@code maxEntries}. Declaring it {@code static} is slightly more efficient (no synthetic
+     * outer-ref field) and is what a real production variant would use — we keep it non-static here
      * specifically to demonstrate the difference to a learner.
      *
-     * <p>See also {@link BoundedAccessOrderMap} below (the static alternative,
-     * unused — kept as a commented-out reference only if we switch later).
+     * <p>See also {@link BoundedAccessOrderMap} below (the static alternative, unused — kept as a
+     * commented-out reference only if we switch later).
      */
     private final class LruMap extends LinkedHashMap<QuoteCacheKey, Entry> {
         LruMap() {
             // initialCapacity=16, loadFactor=0.75, accessOrder=true (move on GET).
             super(16, 0.75f, true);
         }
+
         @Override
         protected boolean removeEldestEntry(Map.Entry<QuoteCacheKey, Entry> eldest) {
             boolean remove = size() > maxEntries;
@@ -73,10 +72,9 @@ public class QuoteCache {
     }
 
     /**
-     * A cached entry. Nested <b>static</b> class — independent of the outer
-     * instance. Made a {@code record} so equals/hashCode/toString come for
-     * free, and the instance is deeply immutable as long as the list is
-     * handed in already-unmodifiable (which we enforce in {@link #put}).
+     * A cached entry. Nested <b>static</b> class — independent of the outer instance. Made a {@code
+     * record} so equals/hashCode/toString come for free, and the instance is deeply immutable as
+     * long as the list is handed in already-unmodifiable (which we enforce in {@link #put}).
      */
     public record Entry(List<ProviderQuote> quotes, Instant storedAt) {
         public Entry {
@@ -91,6 +89,7 @@ public class QuoteCache {
 
     /** Counters. ConcurrentHashMap + LongAdder → lock-free updates. */
     private final Map<String, LongAdder> counters = new ConcurrentHashMap<>();
+
     private final LongAdder evictions = new LongAdder();
 
     // Two constructors live here (this one + the package-private test ctor below),
@@ -118,9 +117,9 @@ public class QuoteCache {
 
     /**
      * Look up cached quotes. Returns {@code null} if absent or stale.
-     * <p>Reads update access order on the LRU map, so this is a mutating
-     * operation under the hood — the {@code synchronizedMap} wrapper is
-     * necessary for correctness.
+     *
+     * <p>Reads update access order on the LRU map, so this is a mutating operation under the hood —
+     * the {@code synchronizedMap} wrapper is necessary for correctness.
      */
     public List<ProviderQuote> get(QuoteCacheKey key) {
         Entry e;
@@ -132,7 +131,9 @@ public class QuoteCache {
             return null;
         }
         if (isStale(e)) {
-            synchronized (lru) { lru.remove(key); }
+            synchronized (lru) {
+                lru.remove(key);
+            }
             counters.get("misses").increment();
             return null;
         }
@@ -151,18 +152,27 @@ public class QuoteCache {
     }
 
     public int size() {
-        synchronized (lru) { return lru.size(); }
+        synchronized (lru) {
+            return lru.size();
+        }
     }
 
-    public long hits()      { return counters.get("hits").sum(); }
-    public long misses()    { return counters.get("misses").sum(); }
-    public long evictions() { return evictions.sum(); }
+    public long hits() {
+        return counters.get("hits").sum();
+    }
+
+    public long misses() {
+        return counters.get("misses").sum();
+    }
+
+    public long evictions() {
+        return evictions.sum();
+    }
 
     /**
-     * A sorted, read-only view of cached keys. {@link TreeMap} sorts them
-     * by {@link QuoteCacheKey}'s natural ordering; the outer
-     * {@code unmodifiableNavigableMap} prevents callers from mutating the
-     * live cache. Good for a future "GET /admin/cache" endpoint.
+     * A sorted, read-only view of cached keys. {@link TreeMap} sorts them by {@link
+     * QuoteCacheKey}'s natural ordering; the outer {@code unmodifiableNavigableMap} prevents
+     * callers from mutating the live cache. Good for a future "GET /admin/cache" endpoint.
      */
     public NavigableMap<QuoteCacheKey, Instant> keysSortedByRoute() {
         NavigableMap<QuoteCacheKey, Instant> sorted = new TreeMap<>();
@@ -178,7 +188,9 @@ public class QuoteCache {
 
     /** Test/admin hook: drop everything. */
     public void clear() {
-        synchronized (lru) { lru.clear(); }
+        synchronized (lru) {
+            lru.clear();
+        }
     }
 
     private boolean isStale(Entry e) {

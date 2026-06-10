@@ -4,8 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A single shipping service quote.
- * Mirrors the frontend ShippingService type in shipping-data.ts.
+ * A single shipping service quote. Mirrors the frontend ShippingService type in shipping-data.ts.
  */
 public record ShippingServiceDto(
         String id,
@@ -22,5 +21,4 @@ public record ShippingServiceDto(
         String ai,
         BreakdownDto breakdown,
         Map<String, String> details,
-        List<String> features
-) {}
+        List<String> features) {}
