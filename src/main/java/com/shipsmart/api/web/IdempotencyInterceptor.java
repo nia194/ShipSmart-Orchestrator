@@ -7,6 +7,12 @@ import com.shipsmart.api.exception.IdempotencyConflictException;
 import com.shipsmart.api.repository.IdempotencyKeyRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,18 +22,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.web.util.WebUtils;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Optional;
-import java.util.UUID;
-
 /**
- * Short-circuits repeated POSTs that share an Idempotency-Key.
- * Miss → handler runs, afterCompletion persists response.
- * Hit same hash → stored body is replayed.
- * Hit different hash → 422 IdempotencyConflictException.
+ * Short-circuits repeated POSTs that share an Idempotency-Key. Miss → handler runs, afterCompletion
+ * persists response. Hit same hash → stored body is replayed. Hit different hash → 422
+ * IdempotencyConflictException.
  */
 @Component
 public class IdempotencyInterceptor implements HandlerInterceptor {
@@ -51,7 +49,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     }
 
     @Override
-    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) throws Exception {
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler)
+            throws Exception {
         if (!enabled || !(handler instanceof HandlerMethod hm)) return true;
         if (hm.getMethodAnnotation(Idempotent.class) == null) return true;
 
@@ -86,7 +85,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     }
 
     @Override
-    public void afterCompletion(HttpServletRequest req, HttpServletResponse res, Object handler, Exception ex) {
+    public void afterCompletion(
+            HttpServletRequest req, HttpServletResponse res, Object handler, Exception ex) {
         if (!enabled || ex != null || !(handler instanceof HandlerMethod hm)) return;
         if (hm.getMethodAnnotation(Idempotent.class) == null) return;
         String key = (String) req.getAttribute(ATTR_KEY);
@@ -95,16 +95,22 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
 
         ContentCachingResponseWrapper wrapper =
                 WebUtils.getNativeResponse(res, ContentCachingResponseWrapper.class);
-        String body = wrapper == null
-                ? "{}"
-                : new String(wrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
+        String body =
+                wrapper == null
+                        ? "{}"
+                        : new String(wrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
 
         try {
             IdempotencyKey row = new IdempotencyKey();
             row.setKey(key);
-            AuthHelper.getUserId().ifPresent(uid -> {
-                try { row.setUserId(UUID.fromString(uid)); } catch (IllegalArgumentException ignored) {}
-            });
+            AuthHelper.getUserId()
+                    .ifPresent(
+                            uid -> {
+                                try {
+                                    row.setUserId(UUID.fromString(uid));
+                                } catch (IllegalArgumentException ignored) {
+                                }
+                            });
             row.setMethod(req.getMethod());
             row.setPath(req.getRequestURI());
             row.setRequestHash((String) req.getAttribute(ATTR_HASH));

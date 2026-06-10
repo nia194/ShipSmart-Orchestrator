@@ -10,6 +10,11 @@ public class ResourceNotFoundException extends RuntimeException {
         this.identifier = identifier;
     }
 
-    public String getResource() { return resource; }
-    public String getIdentifier() { return identifier; }
+    public String getResource() {
+        return resource;
+    }
+
+    public String getIdentifier() {
+        return identifier;
+    }
 }

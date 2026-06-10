@@ -4,6 +4,9 @@ import com.shipsmart.api.provider.QuoteProvider;
 import com.shipsmart.api.provider.QuoteProviderRegistry;
 import com.shipsmart.api.provider.metrics.ProviderCallEvent;
 import com.shipsmart.api.provider.metrics.ProviderMetrics;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -12,17 +15,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Read-only observability endpoints for the provider fanout layer.
  *
- * <p>GET /api/v1/providers — list of registered providers with their
- * priority + enabled flag (useful to confirm wiring at a glance).
- * <br>GET /api/v1/providers/metrics — per-carrier counters snapshot.
- * <br>GET /api/v1/providers/metrics/{carrier}/recent — last-N events.
+ * <p>GET /api/v1/providers — list of registered providers with their priority + enabled flag
+ * (useful to confirm wiring at a glance). <br>
+ * GET /api/v1/providers/metrics — per-carrier counters snapshot. <br>
+ * GET /api/v1/providers/metrics/{carrier}/recent — last-N events.
  */
 @RestController
 @RequestMapping("/api/v1/providers")
@@ -40,9 +39,7 @@ public class ProviderMetricsController {
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> listProviders() {
-        List<Map<String, Object>> out = registry.all().stream()
-                .map(this::toRow)
-                .toList();
+        List<Map<String, Object>> out = registry.all().stream().map(this::toRow).toList();
         return ResponseEntity.ok(out);
     }
 

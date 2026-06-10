@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shipsmart.api.auth.AuthHelper;
 import com.shipsmart.api.domain.AuditLog;
 import com.shipsmart.api.dto.ShipmentSummaryDto;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -12,9 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
-
-import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 
 @Aspect
 @Component
@@ -26,9 +25,8 @@ public class AuditAspect {
     private final ExecutorService auditExecutor;
     private final ObjectMapper mapper;
 
-    public AuditAspect(AuditLogRepository repo,
-                       ExecutorService auditExecutor,
-                       ObjectMapper mapper) {
+    public AuditAspect(
+            AuditLogRepository repo, ExecutorService auditExecutor, ObjectMapper mapper) {
         this.repo = repo;
         this.auditExecutor = auditExecutor;
         this.mapper = mapper;
@@ -45,7 +43,10 @@ public class AuditAspect {
             row.setEntity(audited.entity());
             row.setRequestId(requestId);
             if (userIdStr != null) {
-                try { row.setUserId(UUID.fromString(userIdStr)); } catch (IllegalArgumentException ignored) {}
+                try {
+                    row.setUserId(UUID.fromString(userIdStr));
+                } catch (IllegalArgumentException ignored) {
+                }
             }
             if (result instanceof ShipmentSummaryDto dto) {
                 row.setEntityId(dto.id());
@@ -53,18 +54,24 @@ public class AuditAspect {
             } else if (result != null) {
                 row.setDiff(mapper.writeValueAsString(result));
             }
-            auditExecutor.submit(() -> {
-                try {
-                    repo.save(row);
-                } catch (Exception e) {
-                    log.warn("Audit write failed (non-fatal) for {} {}: {}",
-                            audited.action(), audited.entity(), e.getMessage());
-                }
-            });
+            auditExecutor.submit(
+                    () -> {
+                        try {
+                            repo.save(row);
+                        } catch (Exception e) {
+                            log.warn(
+                                    "Audit write failed (non-fatal) for {} {}: {}",
+                                    audited.action(),
+                                    audited.entity(),
+                                    e.getMessage());
+                        }
+                    });
         } catch (Exception e) {
-            log.warn("Audit capture failed for {}#{}: {}",
+            log.warn(
+                    "Audit capture failed for {}#{}: {}",
                     ((MethodSignature) pjp.getSignature()).getMethod().getName(),
-                    audited.action(), e.getMessage());
+                    audited.action(),
+                    e.getMessage());
         }
         return result;
     }

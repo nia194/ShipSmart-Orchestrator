@@ -1,8 +1,5 @@
 package com.shipsmart.api.provider.metrics;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -13,32 +10,33 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
- * Per-carrier metrics recorder — counters by {@link ProviderCallOutcome}
- * plus a bounded ring buffer of the most-recent events.
+ * Per-carrier metrics recorder — counters by {@link ProviderCallOutcome} plus a bounded ring buffer
+ * of the most-recent events.
  *
  * <p>Intentional concept showcase:
+ *
  * <ul>
- *   <li><b>{@link EnumMap}</b> — counters keyed by enum. EnumMap is backed
- *       by a small {@code int[]}/{@code Object[]}; far cheaper than a
- *       HashMap for enum keys. Not thread-safe by itself, so we either
- *       synchronize on the map or use {@link LongAdder} values (below).</li>
- *   <li><b>{@link ConcurrentHashMap} (carrier → stats)</b> — allows multiple
- *       carriers to update in parallel without contention. {@code computeIfAbsent}
- *       lazily creates per-carrier state on first sight.</li>
- *   <li><b>{@link ArrayDeque} as bounded ring buffer</b> — the right Deque
- *       choice for FIFO of primitives/simple objects (faster than
- *       {@code LinkedList}; the book answer for deque use cases).</li>
+ *   <li><b>{@link EnumMap}</b> — counters keyed by enum. EnumMap is backed by a small {@code
+ *       int[]}/{@code Object[]}; far cheaper than a HashMap for enum keys. Not thread-safe by
+ *       itself, so we either synchronize on the map or use {@link LongAdder} values (below).
+ *   <li><b>{@link ConcurrentHashMap} (carrier → stats)</b> — allows multiple carriers to update in
+ *       parallel without contention. {@code computeIfAbsent} lazily creates per-carrier state on
+ *       first sight.
+ *   <li><b>{@link ArrayDeque} as bounded ring buffer</b> — the right Deque choice for FIFO of
+ *       primitives/simple objects (faster than {@code LinkedList}; the book answer for deque use
+ *       cases).
  * </ul>
  */
 @Component
 public class ProviderMetrics {
 
     /**
-     * Per-carrier bundle. Static nested class (doesn't need the outer
-     * {@code ProviderMetrics} instance) — this is the default for nested
-     * classes that aren't truly inner.
+     * Per-carrier bundle. Static nested class (doesn't need the outer {@code ProviderMetrics}
+     * instance) — this is the default for nested classes that aren't truly inner.
      */
     public static final class CarrierStats {
         final EnumMap<ProviderCallOutcome, LongAdder> counters;
@@ -61,17 +59,13 @@ public class ProviderMetrics {
     private final Map<String, CarrierStats> byCarrier = new ConcurrentHashMap<>();
     private final int recentCap;
 
-    public ProviderMetrics(
-            @Value("${shipsmart.provider-metrics.recent-events:50}") int recentCap) {
+    public ProviderMetrics(@Value("${shipsmart.provider-metrics.recent-events:50}") int recentCap) {
         this.recentCap = recentCap;
     }
 
-    /**
-     * Record an observation. Safe to call from any thread.
-     */
+    /** Record an observation. Safe to call from any thread. */
     public void record(ProviderCallEvent e) {
-        CarrierStats s = byCarrier.computeIfAbsent(
-                e.carrier(), c -> new CarrierStats(recentCap));
+        CarrierStats s = byCarrier.computeIfAbsent(e.carrier(), c -> new CarrierStats(recentCap));
         s.counters.get(e.outcome()).increment();
         s.lastSeen = e.observedAt();
         synchronized (s.recent) {
@@ -108,9 +102,11 @@ public class ProviderMetrics {
             counts.put(o, s.counters.get(o).sum());
         }
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
-        long failures = counts.entrySet().stream()
-                .filter(x -> x.getKey().isFailure())
-                .mapToLong(Map.Entry::getValue).sum();
+        long failures =
+                counts.entrySet().stream()
+                        .filter(x -> x.getKey().isFailure())
+                        .mapToLong(Map.Entry::getValue)
+                        .sum();
         double failureRate = total == 0 ? 0.0 : (double) failures / total;
         return new CarrierSnapshot(counts, total, failureRate, s.lastSeen);
     }
@@ -121,8 +117,7 @@ public class ProviderMetrics {
             Map<ProviderCallOutcome, Long> counts,
             long total,
             double failureRate,
-            Instant lastSeen
-    ) {}
+            Instant lastSeen) {}
 
     public record Snapshot(Map<String, CarrierSnapshot> carriers) {}
 }
