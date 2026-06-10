@@ -1,16 +1,15 @@
 package com.shipsmart.api.domain;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
- * JPA entity for the {@code shipment_requests} table.
- * Schema defined in {@code supabase/migrations/20260404030225_*.sql}.
+ * JPA entity for the {@code shipment_requests} table. Schema defined in {@code
+ * supabase/migrations/20260404030225_*.sql}.
  */
 @Entity
 @Table(name = "shipment_requests")
@@ -56,25 +55,57 @@ public class ShipmentRequest extends BaseEntity {
 
     // ── Getters / Setters ─────────────────────────────────────────────────
 
-    public UUID getId() { return id; }
+    public UUID getId() {
+        return id;
+    }
 
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
+    public String getUserId() {
+        return userId;
+    }
 
-    public String getOrigin() { return origin; }
-    public void setOrigin(String origin) { this.origin = origin; }
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
 
-    public String getDestination() { return destination; }
-    public void setDestination(String destination) { this.destination = destination; }
+    public String getOrigin() {
+        return origin;
+    }
 
-    public LocalDate getDropOffDate() { return dropOffDate; }
-    public void setDropOffDate(LocalDate dropOffDate) { this.dropOffDate = dropOffDate; }
+    public void setOrigin(String origin) {
+        this.origin = origin;
+    }
 
-    public LocalDate getExpectedDeliveryDate() { return expectedDeliveryDate; }
-    public void setExpectedDeliveryDate(LocalDate expectedDeliveryDate) { this.expectedDeliveryDate = expectedDeliveryDate; }
+    public String getDestination() {
+        return destination;
+    }
 
-    public String getPackages() { return packages; }
-    public void setPackages(String packages) { this.packages = packages; }
+    public void setDestination(String destination) {
+        this.destination = destination;
+    }
+
+    public LocalDate getDropOffDate() {
+        return dropOffDate;
+    }
+
+    public void setDropOffDate(LocalDate dropOffDate) {
+        this.dropOffDate = dropOffDate;
+    }
+
+    public LocalDate getExpectedDeliveryDate() {
+        return expectedDeliveryDate;
+    }
+
+    public void setExpectedDeliveryDate(LocalDate expectedDeliveryDate) {
+        this.expectedDeliveryDate = expectedDeliveryDate;
+    }
+
+    public String getPackages() {
+        return packages;
+    }
+
+    public void setPackages(String packages) {
+        this.packages = packages;
+    }
 
     /** Convenience setter that serialises a list of DTOs to JSON. */
     public void setPackagesJson(Object packagesObj) {
@@ -86,14 +117,31 @@ public class ShipmentRequest extends BaseEntity {
         }
     }
 
-    public Double getTotalWeight() { return totalWeight; }
-    public void setTotalWeight(Double totalWeight) { this.totalWeight = totalWeight; }
+    public Double getTotalWeight() {
+        return totalWeight;
+    }
 
-    public Integer getTotalItems() { return totalItems; }
-    public void setTotalItems(Integer totalItems) { this.totalItems = totalItems; }
+    public void setTotalWeight(Double totalWeight) {
+        this.totalWeight = totalWeight;
+    }
 
-    public Instant getCreatedAt() { return createdAt; }
+    public Integer getTotalItems() {
+        return totalItems;
+    }
 
-    public ShipmentStatus getStatus() { return status; }
-    public void setStatus(ShipmentStatus status) { this.status = status; }
+    public void setTotalItems(Integer totalItems) {
+        this.totalItems = totalItems;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public ShipmentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ShipmentStatus status) {
+        this.status = status;
+    }
 }

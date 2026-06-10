@@ -8,5 +8,4 @@ public record ProviderQuote(
         String tier,
         BigDecimal price,
         int transitDays,
-        boolean guaranteed
-) {}
+        boolean guaranteed) {}

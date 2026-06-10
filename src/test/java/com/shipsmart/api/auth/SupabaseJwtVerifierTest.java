@@ -1,25 +1,23 @@
 package com.shipsmart.api.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Date;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Date;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
- * Unit tests for {@link SupabaseJwtVerifier}'s HS256 path — the symmetric mode
- * the local stack + ShipSmart-Test e2e use (the e2e mints HS256 tokens with a
- * shared secret). Verifies the happy path plus every rejection: expired, wrong
- * secret, missing subject, no-secret-configured, and a malformed token. Also
- * checks the ES256 branch self-rejects offline when the header has no kid (so no
- * network call escapes a unit test).
+ * Unit tests for {@link SupabaseJwtVerifier}'s HS256 path — the symmetric mode the local stack +
+ * ShipSmart-Test e2e use (the e2e mints HS256 tokens with a shared secret). Verifies the happy path
+ * plus every rejection: expired, wrong secret, missing subject, no-secret-configured, and a
+ * malformed token. Also checks the ES256 branch self-rejects offline when the header has no kid (so
+ * no network call escapes a unit test).
  */
 class SupabaseJwtVerifierTest {
 
@@ -54,13 +52,14 @@ class SupabaseJwtVerifierTest {
 
     @Test
     void expired_token_is_rejected() {
-        String token = sign(SECRET, "user-123", inMinutes(-1));   // already expired
+        String token = sign(SECRET, "user-123", inMinutes(-1)); // already expired
         assertThat(verifier.verifyAndExtractSubject(token)).isNull();
     }
 
     @Test
     void wrong_secret_signature_is_rejected() {
-        String token = sign("a-totally-different-secret-32-bytes-minimum!", "user-123", inMinutes(60));
+        String token =
+                sign("a-totally-different-secret-32-bytes-minimum!", "user-123", inMinutes(60));
         assertThat(verifier.verifyAndExtractSubject(token)).isNull();
     }
 
@@ -88,12 +87,13 @@ class SupabaseJwtVerifierTest {
         // network fetch and returns null.
         String header = b64url("{\"alg\":\"ES256\"}");
         String payload = b64url("{\"sub\":\"user-123\"}");
-        String token = header + "." + payload + ".c2ln";   // dummy signature
+        String token = header + "." + payload + ".c2ln"; // dummy signature
         assertThat(verifier.verifyAndExtractSubject(token)).isNull();
     }
 
     private static String b64url(String json) {
-        return Base64.getUrlEncoder().withoutPadding()
+        return Base64.getUrlEncoder()
+                .withoutPadding()
                 .encodeToString(json.getBytes(StandardCharsets.UTF_8));
     }
 }

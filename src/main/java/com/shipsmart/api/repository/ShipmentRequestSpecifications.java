@@ -2,13 +2,12 @@ package com.shipsmart.api.repository;
 
 import com.shipsmart.api.domain.ShipmentRequest;
 import com.shipsmart.api.domain.ShipmentStatus;
+import java.time.Instant;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.Instant;
-
 /**
- * Composable JPA Specifications for shipment list filtering.
- * Soft-delete is already enforced by the entity-level @SQLRestriction.
+ * Composable JPA Specifications for shipment list filtering. Soft-delete is already enforced by the
+ * entity-level @SQLRestriction.
  */
 public final class ShipmentRequestSpecifications {
 

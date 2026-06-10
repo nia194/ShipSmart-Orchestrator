@@ -6,9 +6,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Analytics view over a user's saved options. All collections are
- * deliberately chosen to exercise a different part of the Collections
- * framework (see {@link com.shipsmart.api.service.SavedOptionAnalyticsService}).
+ * Analytics view over a user's saved options. All collections are deliberately chosen to exercise a
+ * different part of the Collections framework (see {@link
+ * com.shipsmart.api.service.SavedOptionAnalyticsService}).
  */
 public record SavedOptionAnalyticsResponse(
         long totalSavedOptions,
@@ -25,8 +25,7 @@ public record SavedOptionAnalyticsResponse(
         /** TreeMap<YearMonth as "YYYY-MM", Long>: saves per month, chronological. */
         Map<String, Long> savesByMonth,
         /** EnumMap-derived: route frequency bucket counts. */
-        Map<String, Long> routeFrequencyBuckets
-) {
+        Map<String, Long> routeFrequencyBuckets) {
     /** Nested record — the top-N entry shape. */
     public record TopExpensive(String carrier, String serviceName, BigDecimal price) {}
 }

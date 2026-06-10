@@ -13,13 +13,18 @@ public class OpenApiConfig {
 
     @Bean
     public OpenAPI shipsmartOpenAPI() {
-        SecurityScheme bearer = new SecurityScheme()
-                .type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT");
+        SecurityScheme bearer =
+                new SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("bearer")
+                        .bearerFormat("JWT");
         return new OpenAPI()
-                .info(new Info()
-                        .title("ShipSmart Orchestrator API")
-                        .version("0.2.0")
-                        .description("Transactional Java plane. Owns shipments, quotes, bookings."))
+                .info(
+                        new Info()
+                                .title("ShipSmart Orchestrator API")
+                                .version("0.2.0")
+                                .description(
+                                        "Transactional Java plane. Owns shipments, quotes, bookings."))
                 .addSecurityItem(new SecurityRequirement().addList("bearer"))
                 .components(new Components().addSecuritySchemes("bearer", bearer));
     }

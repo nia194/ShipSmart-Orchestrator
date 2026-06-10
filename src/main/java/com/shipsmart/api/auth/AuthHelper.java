@@ -1,21 +1,22 @@
 package com.shipsmart.api.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Optional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.Optional;
-
 /**
- * Utility to retrieve the authenticated userId from the SecurityContext.
- * Works in tandem with {@link JwtAuthFilter}.
+ * Utility to retrieve the authenticated userId from the SecurityContext. Works in tandem with
+ * {@link JwtAuthFilter}.
  */
 public final class AuthHelper {
 
     private AuthHelper() {}
 
-    /** Returns the authenticated user ID from the SecurityContext, or empty if not authenticated. */
+    /**
+     * Returns the authenticated user ID from the SecurityContext, or empty if not authenticated.
+     */
     public static Optional<String> getUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -32,8 +33,8 @@ public final class AuthHelper {
     }
 
     /**
-     * @deprecated Use {@link #getUserId()} instead. This overload ignores the request parameter
-     *             and reads from SecurityContextHolder. Kept for backward compatibility.
+     * @deprecated Use {@link #getUserId()} instead. This overload ignores the request parameter and
+     *     reads from SecurityContextHolder. Kept for backward compatibility.
      */
     @Deprecated
     public static Optional<String> getUserId(HttpServletRequest request) {
