@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # `build` runs spotlessCheck (formatting), compiles, and runs the test
+      # suite. The one Testcontainers IT uses Docker, which is available on
+      # ubuntu-latest runners.
+      - name: Build (format check + compile + test)
+        run: ./gradlew build --no-daemon
