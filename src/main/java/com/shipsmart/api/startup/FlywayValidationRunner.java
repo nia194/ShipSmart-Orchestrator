@@ -9,9 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 
 /**
- * Bean-lifecycle demo #2 — on boot, logs Flyway state and refuses to start
- * if any migration is PENDING. Keeps Supabase as schema owner (Flyway runs
- * in validate mode); this runner just makes drift fatal + visible.
+ * Bean-lifecycle demo #2 — on boot, logs Flyway state and refuses to start if any migration is
+ * PENDING. Keeps Supabase as schema owner (Flyway runs in validate mode); this runner just makes
+ * drift fatal + visible.
  */
 @Configuration
 public class FlywayValidationRunner {
@@ -28,8 +28,10 @@ public class FlywayValidationRunner {
                 log.error("Flyway reports {} pending migrations — refusing to start", pending);
                 throw new IllegalStateException("Flyway pending migrations detected");
             }
-            log.info("FlywayValidationRunner: schema validated, {} applied, {} total",
-                    info.applied().length, info.all().length);
+            log.info(
+                    "FlywayValidationRunner: schema validated, {} applied, {} total",
+                    info.applied().length,
+                    info.all().length);
         };
     }
 }

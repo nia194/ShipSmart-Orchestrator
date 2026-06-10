@@ -1,5 +1,8 @@
 package com.shipsmart.api.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.shipsmart.api.exception.RateLimitExceededException;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
@@ -7,9 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RateLimitFilterTest {
 

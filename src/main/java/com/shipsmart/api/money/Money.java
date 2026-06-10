@@ -10,49 +10,53 @@ import java.util.concurrent.ConcurrentHashMap;
  * Immutable monetary amount — the project's sole abstraction for prices.
  *
  * <p>Design notes (intentional study vehicle for a learner):
+ *
  * <ul>
- *   <li><b>Value semantics</b> — two {@code Money} instances with equal
- *       amount and currency are {@code equals()}. Never compare money with
- *       {@code ==} in business code.</li>
- *   <li><b>Immutability</b> — all fields are {@code final}; arithmetic
- *       methods return new {@code Money} instead of mutating.</li>
- *   <li><b>Defensive construction</b> — the scale is normalized to 2 at
- *       build time so equals/hashCode can't lie about representation.</li>
- *   <li><b>Flyweight</b> — a tiny cache of common values (ZERO, whole
- *       dollars 1..100) is reused so hot paths skip allocation.</li>
- *   <li><b>Comparable</b> — natural ordering is by amount (currencies must
- *       match; otherwise throws — see {@link #compareTo(Money)}).</li>
+ *   <li><b>Value semantics</b> — two {@code Money} instances with equal amount and currency are
+ *       {@code equals()}. Never compare money with {@code ==} in business code.
+ *   <li><b>Immutability</b> — all fields are {@code final}; arithmetic methods return new {@code
+ *       Money} instead of mutating.
+ *   <li><b>Defensive construction</b> — the scale is normalized to 2 at build time so
+ *       equals/hashCode can't lie about representation.
+ *   <li><b>Flyweight</b> — a tiny cache of common values (ZERO, whole dollars 1..100) is reused so
+ *       hot paths skip allocation.
+ *   <li><b>Comparable</b> — natural ordering is by amount (currencies must match; otherwise throws
+ *       — see {@link #compareTo(Money)}).
  * </ul>
  *
- * <p>Why not a {@code record}? Records can't run custom logic that rejects
- * null/negative or normalize scale in a compact constructor cleanly AND
- * expose a flyweight factory. A {@code final class} with a private ctor
- * keeps construction under our control.
+ * <p>Why not a {@code record}? Records can't run custom logic that rejects null/negative or
+ * normalize scale in a compact constructor cleanly AND expose a flyweight factory. A {@code final
+ * class} with a private ctor keeps construction under our control.
  */
 public final class Money implements Comparable<Money> {
 
     /** Default currency — centralizing this avoids scattered string literals. */
     public static final String DEFAULT_CURRENCY = "USD";
 
-    /** Canonical zero; reused so comparisons like {@code m.equals(Money.ZERO)} are allocation-free. */
-    public static final Money ZERO = new Money(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), DEFAULT_CURRENCY);
+    /**
+     * Canonical zero; reused so comparisons like {@code m.equals(Money.ZERO)} are allocation-free.
+     */
+    public static final Money ZERO =
+            new Money(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), DEFAULT_CURRENCY);
 
     /**
-     * Flyweight cache of whole-dollar USD values 1..100 (the range that
-     * covers 90%+ of our carrier quote line items). Lookups beat
-     * allocation on every hot request in the fanout path.
+     * Flyweight cache of whole-dollar USD values 1..100 (the range that covers 90%+ of our carrier
+     * quote line items). Lookups beat allocation on every hot request in the fanout path.
      *
-     * <p>{@link ConcurrentHashMap} (not HashMap) because the cache is
-     * populated lazily from multiple request threads. A regular
-     * {@code HashMap} would race under concurrent writes.
+     * <p>{@link ConcurrentHashMap} (not HashMap) because the cache is populated lazily from
+     * multiple request threads. A regular {@code HashMap} would race under concurrent writes.
      */
     private static final Map<Integer, Money> USD_WHOLE_DOLLAR_CACHE = new ConcurrentHashMap<>();
+
     static {
         // Static initializer — runs once at class load, before any Money is handed out.
         // Pre-populating avoids the "first request pays" effect in production.
         for (int i = 1; i <= 100; i++) {
-            USD_WHOLE_DOLLAR_CACHE.put(i,
-                    new Money(BigDecimal.valueOf(i).setScale(2, RoundingMode.HALF_UP), DEFAULT_CURRENCY));
+            USD_WHOLE_DOLLAR_CACHE.put(
+                    i,
+                    new Money(
+                            BigDecimal.valueOf(i).setScale(2, RoundingMode.HALF_UP),
+                            DEFAULT_CURRENCY));
         }
     }
 
@@ -112,9 +116,17 @@ public final class Money implements Comparable<Money> {
 
     // ── Accessors ────────────────────────────────────────────────────────────
 
-    public BigDecimal amount() { return amount; }
-    public String currency()   { return currency; }
-    public double toDouble()   { return amount.doubleValue(); }
+    public BigDecimal amount() {
+        return amount;
+    }
+
+    public String currency() {
+        return currency;
+    }
+
+    public double toDouble() {
+        return amount.doubleValue();
+    }
 
     // ── Object contract ──────────────────────────────────────────────────────
 
@@ -156,8 +168,10 @@ public final class Money implements Comparable<Money> {
     private static boolean isWholeDollar(BigDecimal normalized) {
         try {
             int i = normalized.intValueExact();
-            return i >= 1 && i <= 100
-                    && normalized.compareTo(BigDecimal.valueOf(i).setScale(2, RoundingMode.HALF_UP)) == 0;
+            return i >= 1
+                    && i <= 100
+                    && normalized.compareTo(BigDecimal.valueOf(i).setScale(2, RoundingMode.HALF_UP))
+                            == 0;
         } catch (ArithmeticException e) {
             return false;
         }

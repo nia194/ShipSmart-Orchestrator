@@ -3,7 +3,6 @@ package com.shipsmart.api.dto;
 import com.shipsmart.api.domain.ShipmentRequest;
 import com.shipsmart.api.domain.ShipmentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -20,13 +19,19 @@ public record ShipmentSummaryDto(
         ShipmentStatus status,
         Long version,
         Instant createdAt,
-        Instant updatedAt
-) {
+        Instant updatedAt) {
     public static ShipmentSummaryDto from(ShipmentRequest s) {
         return new ShipmentSummaryDto(
-                s.getId(), s.getOrigin(), s.getDestination(),
-                s.getDropOffDate(), s.getExpectedDeliveryDate(),
-                s.getTotalWeight(), s.getTotalItems(), s.getStatus(),
-                s.getVersion(), s.getCreatedAt(), s.getUpdatedAt());
+                s.getId(),
+                s.getOrigin(),
+                s.getDestination(),
+                s.getDropOffDate(),
+                s.getExpectedDeliveryDate(),
+                s.getTotalWeight(),
+                s.getTotalItems(),
+                s.getStatus(),
+                s.getVersion(),
+                s.getCreatedAt(),
+                s.getUpdatedAt());
     }
 }

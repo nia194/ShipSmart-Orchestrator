@@ -1,5 +1,14 @@
 package com.shipsmart.api.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shipsmart.api.auth.SupabaseJwtVerifier;
 import com.shipsmart.api.config.SecurityConfig;
@@ -11,6 +20,11 @@ import com.shipsmart.api.exception.ResourceConflictException;
 import com.shipsmart.api.exception.ResourceNotFoundException;
 import com.shipsmart.api.repository.IdempotencyKeyRepository;
 import com.shipsmart.api.service.ShipmentService;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,39 +37,20 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
 /**
  * MockMvc slice test for {@link ShipmentController}.
  *
- * Covers the interview-defensible HTTP contract:
- *   - 401 when unauthenticated
- *   - 201 + Location + ETag on create
- *   - 200 + ETag on get
- *   - 404 ProblemDetail on missing resource
- *   - 400 on validation failure
- *   - 409 ProblemDetail on If-Match version mismatch
- *   - 204 on soft-delete
+ * <p>Covers the interview-defensible HTTP contract: - 401 when unauthenticated - 201 + Location +
+ * ETag on create - 200 + ETag on get - 404 ProblemDetail on missing resource - 400 on validation
+ * failure - 409 ProblemDetail on If-Match version mismatch - 204 on soft-delete
  */
 @WebMvcTest(ShipmentController.class)
 @Import(SecurityConfig.class)
-@TestPropertySource(properties = {
-        "shipsmart.supabase.jwt-secret=test-secret-at-least-32-characters-long-for-hmac",
-        "shipsmart.security.require-jwt-secret=false"
-})
+@TestPropertySource(
+        properties = {
+            "shipsmart.supabase.jwt-secret=test-secret-at-least-32-characters-long-for-hmac",
+            "shipsmart.security.require-jwt-secret=false"
+        })
 class ShipmentControllerTest {
 
     @Autowired private MockMvc mockMvc;
@@ -73,9 +68,15 @@ class ShipmentControllerTest {
 
     private static ShipmentSummaryDto sampleDto(UUID id, long version) {
         return new ShipmentSummaryDto(
-                id, "10001", "90210",
-                LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 7),
-                10.0, 1, ShipmentStatus.DRAFT, version,
+                id,
+                "10001",
+                "90210",
+                LocalDate.of(2026, 5, 1),
+                LocalDate.of(2026, 5, 7),
+                10.0,
+                1,
+                ShipmentStatus.DRAFT,
+                version,
                 Instant.parse("2026-04-18T00:00:00Z"),
                 Instant.parse("2026-04-18T00:00:00Z"));
     }
@@ -140,9 +141,11 @@ class ShipmentControllerTest {
         Page<ShipmentSummaryDto> page = new PageImpl<>(List.of(sampleDto(id, 0L)));
         when(shipmentService.list(eq(USER_ID), any(), any(), any())).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/shipments")
-                        .param("page", "0").param("size", "10")
-                        .with(authentication(auth())))
+        mockMvc.perform(
+                        get("/api/v1/shipments")
+                                .param("page", "0")
+                                .param("size", "10")
+                                .with(authentication(auth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(id.toString()))
                 .andExpect(jsonPath("$.totalElements").value(1));
@@ -155,32 +158,43 @@ class ShipmentControllerTest {
         UUID id = UUID.randomUUID();
         when(shipmentService.create(any(), eq(USER_ID))).thenReturn(sampleDto(id, 0L));
 
-        CreateShipmentRequest body = new CreateShipmentRequest(
-                "10001", "90210",
-                LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 7),
-                List.of(), 10.0, 1);
+        CreateShipmentRequest body =
+                new CreateShipmentRequest(
+                        "10001",
+                        "90210",
+                        LocalDate.of(2026, 5, 1),
+                        LocalDate.of(2026, 5, 7),
+                        List.of(),
+                        10.0,
+                        1);
 
-        mockMvc.perform(post("/api/v1/shipments")
-                        .with(authentication(auth()))
-                        .header("Idempotency-Key", UUID.randomUUID().toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+        mockMvc.perform(
+                        post("/api/v1/shipments")
+                                .with(authentication(auth()))
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location",
-                        org.hamcrest.Matchers.containsString("/api/v1/shipments/" + id)))
+                .andExpect(
+                        header().string(
+                                        "Location",
+                                        org.hamcrest.Matchers.containsString(
+                                                "/api/v1/shipments/" + id)))
                 .andExpect(header().string("ETag", "\"0\""))
                 .andExpect(jsonPath("$.id").value(id.toString()));
     }
 
     @Test
     void create_missingRequiredField_returns400() throws Exception {
-        String bad = "{\"origin\":\"\",\"destination\":\"90210\",\"dropOffDate\":\"2026-05-01\",\"expectedDeliveryDate\":\"2026-05-07\"}";
+        String bad =
+                "{\"origin\":\"\",\"destination\":\"90210\",\"dropOffDate\":\"2026-05-01\",\"expectedDeliveryDate\":\"2026-05-07\"}";
 
-        mockMvc.perform(post("/api/v1/shipments")
-                        .with(authentication(auth()))
-                        .header("Idempotency-Key", UUID.randomUUID().toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(bad))
+        mockMvc.perform(
+                        post("/api/v1/shipments")
+                                .with(authentication(auth()))
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(bad))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(400));
@@ -192,16 +206,19 @@ class ShipmentControllerTest {
     void patch_staleIfMatch_returns409ProblemDetail() throws Exception {
         UUID id = UUID.randomUUID();
         when(shipmentService.updatePartial(eq(id), eq(USER_ID), any(), eq(1L)))
-                .thenThrow(new ResourceConflictException("If-Match version 1 does not match current 2"));
+                .thenThrow(
+                        new ResourceConflictException(
+                                "If-Match version 1 does not match current 2"));
 
-        PatchShipmentRequest patch = new PatchShipmentRequest(
-                "20001", null, null, null, null, null, null);
+        PatchShipmentRequest patch =
+                new PatchShipmentRequest("20001", null, null, null, null, null, null);
 
-        mockMvc.perform(patch("/api/v1/shipments/{id}", id)
-                        .with(authentication(auth()))
-                        .header("If-Match", "\"1\"")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(patch)))
+        mockMvc.perform(
+                        patch("/api/v1/shipments/{id}", id)
+                                .with(authentication(auth()))
+                                .header("If-Match", "\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(patch)))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(409));
@@ -213,14 +230,15 @@ class ShipmentControllerTest {
         when(shipmentService.updatePartial(eq(id), eq(USER_ID), any(), eq(1L)))
                 .thenReturn(sampleDto(id, 2L));
 
-        PatchShipmentRequest patch = new PatchShipmentRequest(
-                "20001", null, null, null, null, null, null);
+        PatchShipmentRequest patch =
+                new PatchShipmentRequest("20001", null, null, null, null, null, null);
 
-        mockMvc.perform(patch("/api/v1/shipments/{id}", id)
-                        .with(authentication(auth()))
-                        .header("If-Match", "\"1\"")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(patch)))
+        mockMvc.perform(
+                        patch("/api/v1/shipments/{id}", id)
+                                .with(authentication(auth()))
+                                .header("If-Match", "\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(patch)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("ETag", "\"2\""));
     }
@@ -241,7 +259,8 @@ class ShipmentControllerTest {
     void delete_missing_returns404() throws Exception {
         UUID id = UUID.randomUUID();
         doThrow(new ResourceNotFoundException("Shipment", id.toString()))
-                .when(shipmentService).softDelete(id, USER_ID);
+                .when(shipmentService)
+                .softDelete(id, USER_ID);
 
         mockMvc.perform(delete("/api/v1/shipments/{id}", id).with(authentication(auth())))
                 .andExpect(status().isNotFound());

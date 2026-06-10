@@ -5,7 +5,6 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Version;
-
 import java.time.Instant;
 
 @MappedSuperclass
@@ -32,14 +31,31 @@ public abstract class BaseEntity {
         this.updatedAt = Instant.now();
     }
 
-    public Long getVersion() { return version; }
-    public void setVersion(Long version) { this.version = version; }
+    public Long getVersion() {
+        return version;
+    }
 
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public void setVersion(Long version) {
+        this.version = version;
+    }
 
-    public Instant getDeletedAt() { return deletedAt; }
-    public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
 
-    public boolean isDeleted() { return deletedAt != null; }
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
 }
