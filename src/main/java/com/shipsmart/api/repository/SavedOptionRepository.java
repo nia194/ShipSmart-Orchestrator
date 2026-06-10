@@ -1,15 +1,14 @@
 package com.shipsmart.api.repository;
 
 import com.shipsmart.api.domain.SavedOption;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * Spring Data JPA repository for {@code saved_options}.
- * All queries are scoped by userId to enforce data isolation.
+ * Spring Data JPA repository for {@code saved_options}. All queries are scoped by userId to enforce
+ * data isolation.
  */
 public interface SavedOptionRepository extends JpaRepository<SavedOption, UUID> {
 

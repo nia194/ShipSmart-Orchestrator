@@ -4,19 +4,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shipsmart.api.domain.SavedOption;
 import com.shipsmart.api.dto.*;
 import com.shipsmart.api.repository.SavedOptionRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 /**
- * SavedOptionService — business logic for saved shipping options.
- * All operations are scoped to the authenticated user's ID.
+ * SavedOptionService — business logic for saved shipping options. All operations are scoped to the
+ * authenticated user's ID.
  */
 @Service
 public class SavedOptionService {
@@ -49,7 +48,10 @@ public class SavedOptionService {
         entity.setServiceName(request.serviceName());
         entity.setTier(request.tier() != null ? request.tier() : "STANDARD");
         entity.setPrice(BigDecimal.valueOf(request.price() != null ? request.price() : 0));
-        entity.setOriginalPrice(request.originalPrice() != null ? BigDecimal.valueOf(request.originalPrice()) : null);
+        entity.setOriginalPrice(
+                request.originalPrice() != null
+                        ? BigDecimal.valueOf(request.originalPrice())
+                        : null);
         entity.setTransitDays(request.transitDays() != null ? request.transitDays() : 0);
         entity.setEstimatedDelivery(request.estimatedDelivery());
         entity.setDeliverByTime(request.deliverByTime());
@@ -58,7 +60,10 @@ public class SavedOptionService {
         entity.setAiRecommendation(request.aiRecommendation());
         entity.setBreakdown(toJson(request.breakdown()));
         entity.setDetails(toJson(request.details()));
-        entity.setFeatures(request.features() != null ? request.features().toArray(new String[0]) : new String[0]);
+        entity.setFeatures(
+                request.features() != null
+                        ? request.features().toArray(new String[0])
+                        : new String[0]);
         entity.setOrigin(request.origin());
         entity.setDestination(request.destination());
         entity.setDropOffDate(request.dropOffDate());
@@ -71,9 +76,7 @@ public class SavedOptionService {
         return toResponse(saved);
     }
 
-    /**
-     * Remove a saved option. Returns true if deleted, false if not found or not owned.
-     */
+    /** Remove a saved option. Returns true if deleted, false if not found or not owned. */
     public boolean remove(String userId, String optionId) {
         UUID uid = UUID.fromString(userId);
         UUID oid = UUID.fromString(optionId);
@@ -99,8 +102,7 @@ public class SavedOptionService {
                 entity.getExpectedDeliveryDate(),
                 entity.getPackageSummary(),
                 entity.getBookUrl(),
-                formatSavedAt(entity.getCreatedAt())
-        );
+                formatSavedAt(entity.getCreatedAt()));
     }
 
     private ShippingServiceDto buildServiceDto(SavedOption e) {
@@ -119,8 +121,7 @@ public class SavedOptionService {
                 e.getAiRecommendation(),
                 fromJson(e.getBreakdown(), BreakdownDto.class),
                 fromJsonMap(e.getDetails()),
-                e.getFeatures() != null ? List.of(e.getFeatures()) : List.of()
-        );
+                e.getFeatures() != null ? List.of(e.getFeatures()) : List.of());
     }
 
     private String formatSavedAt(Instant instant) {

@@ -1,11 +1,10 @@
 package com.shipsmart.api.domain;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "audit_log")
@@ -37,18 +36,59 @@ public class AuditLog {
     @Column(columnDefinition = "jsonb")
     private String diff;
 
-    public Long getId() { return id; }
-    public Instant getAt() { return at; }
-    public UUID getUserId() { return userId; }
-    public void setUserId(UUID userId) { this.userId = userId; }
-    public String getRequestId() { return requestId; }
-    public void setRequestId(String requestId) { this.requestId = requestId; }
-    public String getAction() { return action; }
-    public void setAction(String action) { this.action = action; }
-    public String getEntity() { return entity; }
-    public void setEntity(String entity) { this.entity = entity; }
-    public UUID getEntityId() { return entityId; }
-    public void setEntityId(UUID entityId) { this.entityId = entityId; }
-    public String getDiff() { return diff; }
-    public void setDiff(String diff) { this.diff = diff; }
+    public Long getId() {
+        return id;
+    }
+
+    public Instant getAt() {
+        return at;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public void setAction(String action) {
+        this.action = action;
+    }
+
+    public String getEntity() {
+        return entity;
+    }
+
+    public void setEntity(String entity) {
+        this.entity = entity;
+    }
+
+    public UUID getEntityId() {
+        return entityId;
+    }
+
+    public void setEntityId(UUID entityId) {
+        this.entityId = entityId;
+    }
+
+    public String getDiff() {
+        return diff;
+    }
+
+    public void setDiff(String diff) {
+        this.diff = diff;
+    }
 }

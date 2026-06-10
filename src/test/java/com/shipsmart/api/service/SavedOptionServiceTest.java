@@ -1,9 +1,18 @@
 package com.shipsmart.api.service;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import com.shipsmart.api.domain.SavedOption;
 import com.shipsmart.api.dto.SaveOptionRequest;
 import com.shipsmart.api.dto.SavedOptionResponse;
 import com.shipsmart.api.repository.SavedOptionRepository;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,21 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class SavedOptionServiceTest {
 
-    @Mock
-    private SavedOptionRepository repository;
+    @Mock private SavedOptionRepository repository;
 
     private SavedOptionService service;
 
@@ -39,16 +37,29 @@ class SavedOptionServiceTest {
 
     @Test
     void save_persistsAndReturnsCorrectResponse() {
-        SaveOptionRequest request = new SaveOptionRequest(
-                "ups-ground", "UPS", "UPS® Ground",
-                "New York, NY", "Los Angeles, CA",
-                "STANDARD", 58.90, null, 7,
-                "Wed, Apr 22", null, false,
-                null, "Best value.", null, null,
-                List.of("Tracking"),
-                "2026-04-15", "2026-04-22",
-                "1x Luggage (25 lbs)", "https://ups.com"
-        );
+        SaveOptionRequest request =
+                new SaveOptionRequest(
+                        "ups-ground",
+                        "UPS",
+                        "UPS® Ground",
+                        "New York, NY",
+                        "Los Angeles, CA",
+                        "STANDARD",
+                        58.90,
+                        null,
+                        7,
+                        "Wed, Apr 22",
+                        null,
+                        false,
+                        null,
+                        "Best value.",
+                        null,
+                        null,
+                        List.of("Tracking"),
+                        "2026-04-15",
+                        "2026-04-22",
+                        "1x Luggage (25 lbs)",
+                        "https://ups.com");
 
         SavedOption savedEntity = buildEntity(USER_ID, "ups-ground", "UPS", "UPS® Ground");
         when(repository.save(any(SavedOption.class))).thenReturn(savedEntity);
@@ -71,14 +82,29 @@ class SavedOptionServiceTest {
 
     @Test
     void save_appliesDefaults() {
-        SaveOptionRequest request = new SaveOptionRequest(
-                "test-svc", "TestCarrier", "Test Service",
-                "A", "B",
-                null, null, null, null,  // tier, price, originalPrice, transitDays all null
-                null, null, null,
-                null, null, null, null,
-                null, null, null, null, null
-        );
+        SaveOptionRequest request =
+                new SaveOptionRequest(
+                        "test-svc",
+                        "TestCarrier",
+                        "Test Service",
+                        "A",
+                        "B",
+                        null,
+                        null,
+                        null,
+                        null, // tier, price, originalPrice, transitDays all null
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
 
         SavedOption entity = buildEntity(USER_ID, "test-svc", "TestCarrier", "Test Service");
         when(repository.save(any())).thenReturn(entity);
@@ -98,10 +124,10 @@ class SavedOptionServiceTest {
     @Test
     void listForUser_returnsMappedResponses() {
         UUID uid = UUID.fromString(USER_ID);
-        List<SavedOption> entities = List.of(
-                buildEntity(USER_ID, "ups-ground", "UPS", "UPS® Ground"),
-                buildEntity(USER_ID, "fedex-express", "FedEx", "FedEx Express Saver®")
-        );
+        List<SavedOption> entities =
+                List.of(
+                        buildEntity(USER_ID, "ups-ground", "UPS", "UPS® Ground"),
+                        buildEntity(USER_ID, "fedex-express", "FedEx", "FedEx Express Saver®"));
         when(repository.findByUserIdOrderByCreatedAtDesc(uid)).thenReturn(entities);
 
         List<SavedOptionResponse> results = service.listForUser(USER_ID);
@@ -160,7 +186,8 @@ class SavedOptionServiceTest {
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private SavedOption buildEntity(String userId, String svcId, String carrier, String serviceName) {
+    private SavedOption buildEntity(
+            String userId, String svcId, String carrier, String serviceName) {
         SavedOption e = new SavedOption();
         // Use reflection or setter to set the id since it's generated
         try {
@@ -182,7 +209,7 @@ class SavedOptionServiceTest {
         e.setTransitDays(7);
         e.setEstimatedDelivery("Wed, Apr 22");
         e.setGuaranteed(false);
-        e.setFeatures(new String[]{"Tracking"});
+        e.setFeatures(new String[] {"Tracking"});
         e.setOrigin("New York, NY");
         e.setDestination("Los Angeles, CA");
         e.setDropOffDate("2026-04-15");

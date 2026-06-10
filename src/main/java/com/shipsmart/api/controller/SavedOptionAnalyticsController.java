@@ -11,9 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * GET /api/v1/saved-options/analytics — groupings over the authenticated
- * user's saved options. Exposes the Collections-framework showcase built
- * in {@link SavedOptionAnalyticsService}.
+ * GET /api/v1/saved-options/analytics — groupings over the authenticated user's saved options.
+ * Exposes the Collections-framework showcase built in {@link SavedOptionAnalyticsService}.
  */
 @RestController
 @RequestMapping("/api/v1/saved-options")

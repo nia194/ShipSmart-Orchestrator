@@ -5,17 +5,15 @@ import com.shipsmart.api.dto.BookingRedirectRequest;
 import com.shipsmart.api.dto.BookingRedirectResponse;
 import com.shipsmart.api.service.BookingService;
 import jakarta.validation.Valid;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Optional;
-
 /**
- * Booking redirect API endpoint.
- * Replaces the legacy Supabase edge function: generate-book-redirect.
- * Authentication is optional — matches legacy behavior where anonymous
+ * Booking redirect API endpoint. Replaces the legacy Supabase edge function:
+ * generate-book-redirect. Authentication is optional — matches legacy behavior where anonymous
  * users can also trigger booking redirects.
  */
 @RestController
@@ -31,13 +29,17 @@ public class BookingController {
     }
 
     /**
-     * POST /api/v1/bookings/redirect
-     * Tracks a booking redirect and returns the carrier checkout URL.
+     * POST /api/v1/bookings/redirect Tracks a booking redirect and returns the carrier checkout
+     * URL.
      */
     @PostMapping("/redirect")
-    public ResponseEntity<BookingRedirectResponse> trackRedirect(@Valid @RequestBody BookingRedirectRequest body) {
+    public ResponseEntity<BookingRedirectResponse> trackRedirect(
+            @Valid @RequestBody BookingRedirectRequest body) {
         Optional<String> userId = AuthHelper.getUserId();
-        log.info("POST /bookings/redirect serviceId={} user={}", body.serviceId(), userId.orElse("anonymous"));
+        log.info(
+                "POST /bookings/redirect serviceId={} user={}",
+                body.serviceId(),
+                userId.orElse("anonymous"));
         BookingRedirectResponse response = bookingService.trackAndRedirect(userId, body);
         return ResponseEntity.ok(response);
     }

@@ -8,20 +8,19 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
- * Per-IP Bucket4j rate limiting on public POST endpoints.
- * In-memory; when Orchestrator scales past one replica, move bucket state to Redis.
+ * Per-IP Bucket4j rate limiting on public POST endpoints. In-memory; when Orchestrator scales past
+ * one replica, move bucket state to Redis.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -42,7 +41,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private int bookingsPerMinute;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+    protected void doFilterInternal(
+            HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
         if (!enabled || !"POST".equals(req.getMethod())) {
             chain.doFilter(req, res);
@@ -68,10 +68,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private Bucket newBucket(int perMinute) {
         return Bucket.builder()
-                .addLimit(Bandwidth.builder()
-                        .capacity(perMinute)
-                        .refillGreedy(perMinute, Duration.ofMinutes(1))
-                        .build())
+                .addLimit(
+                        Bandwidth.builder()
+                                .capacity(perMinute)
+                                .refillGreedy(perMinute, Duration.ofMinutes(1))
+                                .build())
                 .build();
     }
 
