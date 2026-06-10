@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -73,6 +74,8 @@ class ShipmentRequestRepositoryIT {
             new PostgreSQLContainer<>("postgres:16-alpine").withReuse(true);
 
     @Autowired private ShipmentRequestRepository repo;
+
+    @Autowired private TestEntityManager em;
 
     private static final String USER_A = "user-a";
     private static final String USER_B = "user-b";
@@ -168,6 +171,11 @@ class ShipmentRequestRepositoryIT {
         deleted.setDeletedAt(Instant.now());
         repo.save(deleted);
 
+        // Detach managed entities so the reads below hit the DB (and the
+        // @SQLRestriction soft-delete filter) instead of the persistence-context cache.
+        em.flush();
+        em.clear();
+
         var page =
                 repo.findAll(
                         Specification.where(ShipmentRequestSpecifications.ownedBy(USER_A)),
@@ -185,6 +193,10 @@ class ShipmentRequestRepositoryIT {
         ShipmentRequest s = repo.save(make(USER_A, ShipmentStatus.DRAFT, "10001"));
         s.setDeletedAt(Instant.now());
         repo.save(s);
+
+        // Detach so findById issues a real SELECT and the soft-delete filter applies.
+        em.flush();
+        em.clear();
 
         assertThat(repo.findById(s.getId())).isEmpty();
         assertThat(repo.findByIdIncludingDeleted(s.getId())).isPresent();
