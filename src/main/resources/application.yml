@@ -83,6 +83,11 @@ shipsmart:
     require-jwt-secret: ${REQUIRE_JWT_SECRET:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # ── Shipping scope (platform policy) ──────────────────────────────────────
+  # worldwide (default) | domestic. domestic suppresses international carrier
+  # lanes (DHL Express Worldwide). Mirrors ShipSmart-API SHIPPING_SCOPE.
+  shipping:
+    scope: ${SHIPPING_SCOPE:worldwide}
   python-api:
     base-url: ${INTERNAL_PYTHON_API_URL:http://localhost:8000}
   # ── ShipSmart-MCP (tool server) ───────────────────────────────────────────
