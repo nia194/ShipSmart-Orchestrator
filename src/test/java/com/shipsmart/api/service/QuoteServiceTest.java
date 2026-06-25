@@ -28,7 +28,7 @@ class QuoteServiceTest {
     void setUp() {
         // By default, mock FedEx to return empty list (uses mock fallback)
         when(fedExProvider.getQuotes(any())).thenReturn(List.of());
-        quoteService = new QuoteService(shipmentRequestRepository, fedExProvider);
+        quoteService = new QuoteService(shipmentRequestRepository, fedExProvider, "worldwide");
     }
 
     @Test
@@ -258,6 +258,32 @@ class QuoteServiceTest {
 
         // Remaining FedEx quote should be in "more"
         assertTrue(response.prime().more().stream().anyMatch(s -> s.id().equals("fedex-express")));
+    }
+
+    @Test
+    void generateQuotes_domesticScope_omitsInternationalDhlLane() {
+        // A domestic-only deployment suppresses the DHL Express Worldwide lane.
+        QuoteService domestic =
+                new QuoteService(shipmentRequestRepository, fedExProvider, "domestic");
+        QuoteRequest request =
+                new QuoteRequest(
+                        "NYC, NY",
+                        "LA, CA",
+                        "2026-04-15",
+                        "2026-04-20",
+                        List.of(
+                                new PackageItemDto(
+                                        "luggage", "1", "25", "24", "15", "10", "standard")));
+
+        QuoteResponse response = domestic.generateQuotes(request, null);
+
+        assertEquals(
+                2,
+                response.prime().top().size(),
+                "Domestic scope omits the DHL international lane (UPS + FedEx only)");
+        assertTrue(
+                response.prime().top().stream().noneMatch(s -> s.id().equals("dhl-express")),
+                "DHL Express Worldwide must not appear in domestic mode");
     }
 
     @Test

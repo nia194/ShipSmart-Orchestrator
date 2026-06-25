@@ -13,6 +13,7 @@ import java.util.*;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,10 +34,20 @@ public class QuoteService {
     private final ShipmentRequestRepository shipmentRequestRepository;
     private final FedExProvider fedExProvider;
 
+    /**
+     * Shipping-scope policy (mirrors ShipSmart-API SHIPPING_SCOPE). When {@code domestic}, the
+     * international carrier lane (DHL Express Worldwide) is suppressed from the quote fan-out.
+     */
+    private final boolean domesticOnly;
+
     public QuoteService(
-            ShipmentRequestRepository shipmentRequestRepository, FedExProvider fedExProvider) {
+            ShipmentRequestRepository shipmentRequestRepository,
+            FedExProvider fedExProvider,
+            @Value("${shipsmart.shipping.scope:worldwide}") String shippingScope) {
         this.shipmentRequestRepository = shipmentRequestRepository;
         this.fedExProvider = fedExProvider;
+        this.domesticOnly =
+                "domestic".equalsIgnoreCase(shippingScope == null ? "" : shippingScope.trim());
     }
 
     /**
@@ -151,8 +162,11 @@ public class QuoteService {
             primeMore.add(fedexGroundEconomy(pm, baseDate));
         }
 
-        // Add DHL as third top pick (mock, for now)
-        primeTop.add(dhlExpressWorldwide(pm, baseDate));
+        // Add DHL as third top pick (mock, for now). DHL Express Worldwide is the
+        // international lane — suppressed in domestic-only deployments.
+        if (!domesticOnly) {
+            primeTop.add(dhlExpressWorldwide(pm, baseDate));
+        }
 
         // Build private section (all mock, as before)
         List<ShippingServiceDto> privateTop =
