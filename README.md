@@ -330,6 +330,19 @@ Run a single test class:
 
 > Build/run on **JDK 17** (the Gradle wrapper is 8.12). JDK 25 + wrapper 8.12 fails at `:test` task creation.
 
+### Formatting & CI
+
+Code style is enforced by **Spotless** (Google Java Format, AOSP style; see `build.gradle`).
+`spotlessCheck` is wired into `check`, so it also runs as part of `./gradlew build` — a
+mis-formatted file fails the build. Auto-format before committing:
+
+```bash
+./gradlew spotlessApply
+```
+
+CI (`.github/workflows/ci.yml`) is a single `./gradlew build --no-daemon` step: Spotless
+format check + compile + the full test suite.
+
 ---
 
 ## Operational notes
