@@ -313,7 +313,7 @@ When changing any of the contracts above, update them in lockstep:
 ./gradlew test
 ```
 
-**84 tests across 17 classes** — JUnit 5 with Spring Boot Test (77 run, 7 skip). Most tests run on H2 in-memory with PostgreSQL compatibility mode; the repository integration test (`ShipmentRequestRepositoryIT`, 7 tests) runs against real Postgres via **Testcontainers** and **self-skips** when no Docker daemon is reachable, so the rest of the suite stays green on a laptop without Docker.
+**89 tests across 17 classes** — JUnit 5 with Spring Boot Test (80 run, 9 skip). Most tests run on H2 in-memory with PostgreSQL compatibility mode; the repository integration test (`ShipmentRequestRepositoryIT`, 9 tests) runs against real Postgres via **Testcontainers** and **self-skips** when no Docker daemon is reachable, so the rest of the suite stays green on a laptop without Docker.
 
 Notable classes:
 
