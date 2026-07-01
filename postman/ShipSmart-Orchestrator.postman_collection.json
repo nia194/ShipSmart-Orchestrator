@@ -1,0 +1,421 @@
+{
+  "info": {
+    "name": "ShipSmart-Orchestrator",
+    "description": "Java transactional API \u2014 health + the shipments chain (JWT auth, idempotency, ownership scoping) + providers. A collection pre-request mints an HS256 JWT with the shared e2e test secret (NOT production).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function b64url(wa){ return CryptoJS.enc.Base64.stringify(wa).replace(/=+$/,'').replace(/\\+/g,'-').replace(/\\//g,'_'); }",
+          "function mint(sub){",
+          "  var now = Math.floor(Date.now()/1000);",
+          "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+          "  var p = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({sub:sub, role:'authenticated', iat:now, exp:now+900})));",
+          "  var s = b64url(CryptoJS.HmacSHA256(h+'.'+p, pm.environment.get('SUPABASE_JWT_SECRET')));",
+          "  return h+'.'+p+'.'+s;",
+          "}",
+          "pm.collectionVariables.set('jwt', mint(pm.environment.get('USER_A')));",
+          "pm.collectionVariables.set('jwt_userB', mint(pm.environment.get('USER_B')));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('no server error', () => pm.expect(pm.response.code).to.be.below(500));",
+          "pm.test('responds < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8080"
+    },
+    {
+      "key": "jwt",
+      "value": ""
+    },
+    {
+      "key": "jwt_userB",
+      "value": ""
+    },
+    {
+      "key": "shipment_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/v1/health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /actuator/health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shipments (auth + idempotency + ownership)",
+      "item": [
+        {
+          "name": "list requires auth -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 without a token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "create (Idempotency-Key)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('shipment_id', pm.response.json().id);",
+                  "pm.test('has an id', () => pm.expect(pm.response.json().id).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": \"10001\",\n  \"destination\": \"90210\",\n  \"dropOffDate\": \"2026-06-01\",\n  \"expectedDeliveryDate\": \"2026-06-07\",\n  \"packages\": [],\n  \"totalWeight\": 10.0,\n  \"totalItems\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "owner reads it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 for the owner', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments/{{shipment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments",
+                "{{shipment_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "appears in owner's list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ids = (pm.response.json().content || []).map(s => s.id);",
+                  "pm.test('list contains the created shipment', () => pm.expect(ids).to.include(pm.collectionVariables.get('shipment_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "other user cannot read it -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 (ownership not bypassable)', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_userB}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments/{{shipment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments",
+                "{{shipment_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "unknown id -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/shipments/00000000-0000-0000-0000-0000000000ff",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "shipments",
+                "00000000-0000-0000-0000-0000000000ff"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Providers",
+      "item": [
+        {
+          "name": "GET /api/v1/providers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/providers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "providers"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
