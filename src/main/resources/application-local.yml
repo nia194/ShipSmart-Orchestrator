@@ -17,3 +17,10 @@ management:
   tracing:
     sampling:
       probability: 1.0
+  otlp:
+    tracing:
+      export:
+        # Local dev samples traces but must NOT require an OTLP collector: with no
+        # endpoint the exporter bean fails validation ("Invalid endpoint") and crashes
+        # `java -jar` boot. Disable export locally; set an endpoint + enable to ship spans.
+        enabled: false
