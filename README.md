@@ -27,7 +27,7 @@ Core transactional backend for the ShipSmart shipping platform. Owns quotes, sav
 
 ## The ShipSmart ecosystem
 
-This service is one of five sibling repositories. Clone them as siblings of this directory when working on the full system.
+This service is one of six sibling repositories. Clone them as siblings of this directory when working on the full system.
 
 | Repo | Role | Stack |
 |------|------|-------|
@@ -36,6 +36,7 @@ This service is one of five sibling repositories. Clone them as siblings of this
 | [ShipSmart-API](https://github.com/nia194/ShipSmart-API) | Python AI/orchestration service — RAG, advisors, recommendations, compliance (UC2), multi-agent workflow (UC3/UC4) | FastAPI, Python 3.13 |
 | [ShipSmart-MCP](https://github.com/nia194/ShipSmart-MCP) | MCP tool server — `validate_address`, `get_quote_preview` (provider-pluggable) | FastAPI + MCP |
 | [ShipSmart-Infra](https://github.com/nia194/ShipSmart-Infra) | Supabase migrations + edge functions, deployment configs, docs | Supabase, Render blueprints |
+| [ShipSmart-Test](https://github.com/nia194/ShipSmart-Test) | Cross-repo integration harness — contract + live e2e suites, cross-service Postman collection | Python 3.13, pytest |
 
 ```
             ┌──────────────────────────────┐
@@ -147,7 +148,7 @@ HTTP request
 | `com.shipsmart.api.auth` | Supabase JWT validation filter (`JwtAuthFilter`, `SupabaseJwtVerifier`, `AuthHelper`). |
 | `com.shipsmart.api.web` | Cross-cutting filters/interceptors — `CorrelationIdFilter` (request-id MDC), `RateLimitFilter` (Bucket4j per-IP), `BodyCachingFilter` + `CachedBodyRequestWrapper` (re-readable request body), `IdempotencyInterceptor` + `@Idempotent` annotation + `IdempotencyCleanupJob` (scheduled TTL sweep). |
 | `com.shipsmart.api.audit` | AOP-based audit trail — `@Audited` annotation, `AuditAspect`, `AuditLogRepository`. Async writes to `audit_log` via the dedicated `audit` executor pool. |
-| `com.shipsmart.api.startup` | `FlywayValidationRunner` — boot-time guard that refuses to start on pending migrations and logs schema state. |
+| `com.shipsmart.api.startup` | `FlywayValidationRunner` — boot-time guard that refuses to start on pending migrations and logs schema state; warns and skips (instead of failing boot) when Flyway is disabled. |
 | `com.shipsmart.api.config` | `SecurityConfig`, `AppConfig`, `WebMvcConfig`, `ExecutorConfig` (quote-provider + audit thread pools, MDC-aware), `OpenApiConfig`, `EnvLoader`. |
 | `com.shipsmart.api.exception` | Global exception handler + typed exceptions (`ResourceNotFoundException`, `ResourceConflictException`, `OwnershipException`, `IdempotencyConflictException`, `RateLimitExceededException`). |
 
@@ -251,7 +252,7 @@ These have sensible defaults — override via env or `application.yml` only when
 | `shipsmart.idempotency.ttl-hours` | `24` | Retention for stored idempotency responses; `IdempotencyCleanupJob` sweeps expired rows. |
 | `shipsmart.executor.quote-provider.{core-pool-size,max-pool-size,queue-capacity}` | `4 / 8 / 100` | Thread pool used to fan provider quotes out in parallel. |
 | `shipsmart.executor.audit.{core-pool-size,max-pool-size,queue-capacity}` | `2 / 2 / 500` | Thread pool used by `AuditAspect` for async `audit_log` writes. |
-| `SPRING_FLYWAY_ENABLED` | `true` | Toggle Flyway (validate-mode) at boot. Disable only for ad-hoc local runs against a non-Postgres DB. |
+| `SPRING_FLYWAY_ENABLED` | `true` | Toggle Flyway (validate-mode) at boot. Disable only for ad-hoc local runs against a non-Postgres DB — the validation runner then warns and skips instead of failing to boot. |
 | `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | `0.0` | OpenTelemetry trace sampling rate. Bump to `1.0` for full sampling in dev. |
 | `MANAGEMENT_OTLP_TRACING_ENDPOINT` | *(unset)* | OTLP collector endpoint; leave unset to keep the exporter off. |
 
@@ -313,7 +314,7 @@ When changing any of the contracts above, update them in lockstep:
 ./gradlew test
 ```
 
-**89 tests across 17 classes** — JUnit 5 with Spring Boot Test (80 run, 9 skip). Most tests run on H2 in-memory with PostgreSQL compatibility mode; the repository integration test (`ShipmentRequestRepositoryIT`, 9 tests) runs against real Postgres via **Testcontainers** and **self-skips** when no Docker daemon is reachable, so the rest of the suite stays green on a laptop without Docker.
+**88 tests across 18 classes** — JUnit 5 with Spring Boot Test (81 run, 7 skip). Most tests run on H2 in-memory with PostgreSQL compatibility mode; the repository integration test (`ShipmentRequestRepositoryIT`, 7 tests) runs against real Postgres via **Testcontainers** and **self-skips** when no Docker daemon is reachable, so the rest of the suite stays green on a laptop without Docker.
 
 Notable classes:
 
@@ -321,6 +322,7 @@ Notable classes:
 - **`QuoteCacheTest`** — LRU eviction + TTL staleness (via an injected `Clock`) + hit/miss/eviction counters.
 - **`QuoteFanoutServiceTest`** — the cache short-circuit, parallel provider merge + cache-fill, and canonical sorting (providers mocked).
 - **`SupabaseJwtVerifierTest`** — the HS256 path (valid / expired / wrong-secret / missing-sub) the local stack + ShipSmart-Test e2e rely on.
+- **`FlywayValidationRunnerTest`** — the boot-time schema guard's three paths: skip-with-a-warning when Flyway is disabled (`SPRING_FLYWAY_ENABLED=false`), pass-through when nothing is pending, and fail-fast on a pending migration.
 
 Run a single test class:
 
@@ -329,6 +331,25 @@ Run a single test class:
 ```
 
 > Build/run on **JDK 17** (the Gradle wrapper is 8.12). JDK 25 + wrapper 8.12 fails at `:test` task creation.
+
+### API collection (Postman)
+
+[`postman/ShipSmart-Orchestrator.postman_collection.json`](./postman/ShipSmart-Orchestrator.postman_collection.json)
+is a runnable, asserted walk of the live API: the health probes, the shipments lifecycle
+(`401` unauthenticated → create with `Idempotency-Key` → owner read + list → cross-user
+`404` → unknown-id `404`), and the provider inventory. A collection-level pre-request
+script mints the two test users' Supabase-style HS256 JWTs from the environment's
+`SUPABASE_JWT_SECRET` — no manual tokens needed — and a collection-level guard fails any
+request that returns a 5xx or takes over 5s. Import it with
+[`postman/environments/local.postman_environment.json`](./postman/environments/local.postman_environment.json)
+(its defaults match `ShipSmart-Test`'s self-contained stack; point `SUPABASE_JWT_SECRET`
+at your own boot's secret otherwise), or run it headless:
+
+```bash
+npx newman run postman/ShipSmart-Orchestrator.postman_collection.json \
+  -e postman/environments/local.postman_environment.json \
+  --env-var "SUPABASE_JWT_SECRET=<your local secret>"
+```
 
 ### Formatting & CI
 
@@ -350,8 +371,8 @@ format check + compile + the full test suite.
 ### Startup & boot
 
 - **`Failed to determine driver class` / startup hangs:** `DATABASE_URL` is missing or malformed (must be a JDBC URL — `jdbc:postgresql://…`).
-- **Full-context boot under `java -jar`:** the `local` profile sets `management.tracing.sampling.probability=1.0` but ships no OTLP endpoint — export `MANAGEMENT_TRACING_SAMPLING_PROBABILITY=0.0` (or a real `MANAGEMENT_OTLP_TRACING_ENDPOINT`) to avoid an "Invalid endpoint" exporter error. Every Spring `@Component` with more than one constructor must annotate its injection constructor with `@Autowired` (e.g. `QuoteCache`), otherwise the full context fails with *"No default constructor found"* — the `@SpringBootTest` in `ShipSmartApiApplicationTests` now guards this in CI. Both are exercised end-to-end by `ShipSmart-Test`'s live Java e2e.
-- **Migrations:** Supabase remains the source of truth — migrations live in `ShipSmart-Infra/supabase/migrations/` and are applied via `supabase db push`. The Java service ships a **mirror** of those migrations under `src/main/resources/db/migration/` (`V1__baseline.sql`, `V2__interview_upgrade.sql`) and runs Flyway in **validate mode** (`spring.flyway.validate-on-migrate=true`, `baseline-on-migrate=true`). `FlywayValidationRunner` makes any pending migration **fatal at boot** and logs applied/total counts. Disable with `SPRING_FLYWAY_ENABLED=false` only when running against a non-Postgres dev DB.
+- **Full-context boot under `java -jar`:** the `local` profile samples traces at 1.0 for dev visibility but ships the OTLP exporter **disabled** (`management.otlp.tracing.export.enabled=false` in `application-local.yml`), so a local boot needs no OTLP collector and no override env — set a real `MANAGEMENT_OTLP_TRACING_ENDPOINT` (and re-enable that export flag) to ship spans. Every Spring `@Component` with more than one constructor must annotate its injection constructor with `@Autowired` (e.g. `QuoteCache`), otherwise the full context fails with *"No default constructor found"* — the `@SpringBootTest` in `ShipSmartApiApplicationTests` guards this in CI. Both are exercised end-to-end by `ShipSmart-Test`'s live Java e2e.
+- **Migrations:** Supabase remains the source of truth — migrations live in `ShipSmart-Infra/supabase/migrations/` and are applied via `supabase db push`. The Java service ships a **mirror** of those migrations under `src/main/resources/db/migration/` (`V1__baseline.sql`, `V2__interview_upgrade.sql`) and runs Flyway in **validate mode** (`spring.flyway.validate-on-migrate=true`, `baseline-on-migrate=true`). `FlywayValidationRunner` makes any pending migration **fatal at boot** and logs applied/total counts. Disable with `SPRING_FLYWAY_ENABLED=false` only when running against a non-Postgres dev DB — Flyway is injected as an `ObjectProvider`, so the runner then logs a warning and skips validation instead of crashing on the missing bean.
 
 ### Auth & CORS
 
