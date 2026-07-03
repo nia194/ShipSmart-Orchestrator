@@ -116,11 +116,6 @@ shipsmart:
     enabled: ${SHIPSMART_IDEMPOTENCY_ENABLED:true}
     ttl-hours: ${SHIPSMART_IDEMPOTENCY_TTL_HOURS:24}
 
-  # ── Cache TTLs ────────────────────────────────────────────────────────────
-  cache:
-    quotes-ttl: ${SHIPSMART_CACHE_QUOTES_TTL:PT10M}
-    shipment-ttl: ${SHIPSMART_CACHE_SHIPMENT_TTL:PT2M}
-
   # ── Quote provider fanout executor ────────────────────────────────────────
   executor:
     quote-provider:

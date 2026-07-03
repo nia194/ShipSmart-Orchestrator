@@ -1,6 +1,5 @@
 package com.shipsmart.api.auth;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,14 +29,5 @@ public final class AuthHelper {
             return Optional.of(ud.getUsername());
         }
         return Optional.empty();
-    }
-
-    /**
-     * @deprecated Use {@link #getUserId()} instead. This overload ignores the request parameter and
-     *     reads from SecurityContextHolder. Kept for backward compatibility.
-     */
-    @Deprecated
-    public static Optional<String> getUserId(HttpServletRequest request) {
-        return getUserId();
     }
 }
