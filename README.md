@@ -141,7 +141,6 @@ HTTP request
 | `com.shipsmart.api.provider` | Strategy-based quote fanout: `QuoteProvider` interface (default-method `priority()`), `AbstractQuoteProvider` template, `QuoteProviderRegistry` (priority-sorted), `QuoteComparators` / `QuoteSortOption`, `FedExQuoteProviderAdapter`. |
 | `com.shipsmart.api.provider.metrics` | Per-carrier call metrics — `ProviderCallOutcome` enum (with per-constant behavior), `ProviderCallEvent` record, `ProviderMetrics` (`EnumMap` counters + `ArrayDeque` ring buffer per carrier). |
 | `com.shipsmart.api.cache` | In-memory LRU quote cache — `QuoteCacheKey` value object (`Comparable`, `equals`/`hashCode`), `QuoteCache` (`LinkedHashMap` access-order LRU + `ConcurrentHashMap` stats + `TreeMap` sorted view). Coexists with the Spring `CacheManager` (Caffeine) used for `quotesByShipmentId` / `shipmentById`. |
-| `com.shipsmart.api.money` | `Money` value type — immutable, `Comparable`, flyweight cache of common whole-dollar values. |
 | `com.shipsmart.api.repository` | Spring Data JPA repositories — `ShipmentRequestRepository` (+ `ShipmentRequestSpecifications` for filterable list), `SavedOptionRepository`, `RedirectTrackingRepository`, `IdempotencyKeyRepository`. |
 | `com.shipsmart.api.domain` | JPA entities — `BaseEntity` (audit columns + `@Version`), `ShipmentRequest`, `ShipmentStatus` enum, `SavedOption`, `RedirectTracking`, `IdempotencyKey`, `AuditLog`. |
 | `com.shipsmart.api.dto` | Request/response DTOs (`CreateShipmentRequest`, `PatchShipmentRequest`, `ShipmentSummaryDto`, quote/booking/saved-option DTOs, `BreakdownDto`, etc.). |
@@ -242,8 +241,6 @@ These have sensible defaults — override via env or `application.yml` only when
 | `shipsmart.quote-cache.max-entries` | `256` | LRU cap on cached fanout responses (legacy in-memory `QuoteCache`). |
 | `shipsmart.quote-cache.ttl-seconds` | `120` | Cached-response freshness window (legacy `QuoteCache`). |
 | `shipsmart.provider-metrics.recent-events` | `50` | Ring-buffer size for `GET /api/v1/providers/metrics/{carrier}/recent`. |
-| `shipsmart.cache.quotes-ttl` | `PT10M` | Caffeine TTL for `quotesByShipmentId` (Spring `CacheManager`). |
-| `shipsmart.cache.shipment-ttl` | `PT2M` | Caffeine TTL for `shipmentById`. |
 | `shipsmart.rate-limit.enabled` | `true` | Master switch for the Bucket4j per-IP rate limiter. |
 | `shipsmart.rate-limit.shipments-per-minute` | `20` | Per-IP cap for `/api/v1/shipments` writes. |
 | `shipsmart.rate-limit.quotes-per-minute` | `30` | Per-IP cap for `/api/v1/quotes`. |
