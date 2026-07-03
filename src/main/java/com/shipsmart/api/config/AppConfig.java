@@ -49,10 +49,4 @@ public class AppConfig {
                 .setReadTimeout(Duration.ofSeconds(20))
                 .build();
     }
-
-    // TODO: Add WebClient bean here for calling the FastAPI Python service
-    // @Bean
-    // public WebClient pythonApiClient(@Value("${shipsmart.python-api.base-url}") String baseUrl) {
-    //     return WebClient.builder().baseUrl(baseUrl).build();
-    // }
 }
