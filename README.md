@@ -29,18 +29,26 @@ Testcontainers
 *(Swagger is deliberately 401 in production; Render free tier cold-starts
 ~30–60 s).*
 
+> **Metric convention:** structural counts/configs are facts (111 tests, rate
+> limits 20/30/10 per min, Caffeine `max 5000 / 120s`); latency figures are
+> **(target)** budgets, never measured production metrics.
+
 ---
 
 ## Table of contents
 
 - [The ShipSmart ecosystem](#the-shipsmart-ecosystem)
-- [Engineering highlights](#engineering-highlights)
+- [Architecture (HLD)](#architecture-hld)
+- [Request flow](#request-flow)
 - [The trust boundary: AiClaimGuard](#the-trust-boundary-aiclaimguard)
-- [Architecture](#architecture)
+- [Scatter-gather quoting](#scatter-gather-quoting)
+- [Concurrency & idempotency](#concurrency--idempotency)
+- [Object design (OOD)](#object-design-ood)
+- [Data model (ER)](#data-model-er)
+- [Caching](#caching)
 - [Security](#security)
-- [Reliability & correctness](#reliability--correctness)
-- [Performance](#performance)
-- [Observability & audit](#observability--audit)
+- [Performance & availability](#performance--availability)
+- [Deployment topology](#deployment-topology)
 - [Running locally](#running-locally)
 - [Configuration reference](#configuration-reference)
 - [Tests](#tests)
@@ -66,84 +74,392 @@ that snapshots each component at a pinned commit (see its `COMPONENTS.yml`).
 
 ---
 
-## Engineering highlights
+## Architecture (HLD)
 
-| | Capability | Why it's interesting |
-|---|---|---|
-| 🚧 | **`AiClaimGuard` trust boundary** | Four invariants re-derive every AI-assisted booking from stored state; on any mismatch the booking is refused, and on acceptance the **authoritative total is always the stored quote's** — never the AI's. |
-| 🔑 | **Real JWKS auth** | `SupabaseJwtVerifier` validates **RS256 against the issuer's JWKS**; HS256 only as legacy/test fallback; prod is fail-closed (`require-jwt-secret: true`). |
-| ⚡ | **Scatter-gather quoting** | Carriers queried in parallel on a bounded executor with per-call timeouts — total latency ≈ slowest carrier; failures surface as **`QuoteTrust`-tagged partials**, never silent gaps. |
-| 🔁 | **Idempotency subsystem** | `@Idempotent` + key store + body hash: retried writes replay the stored response; payload mismatch ⇒ conflict; a scheduled cleanup job purges expired keys. |
-| 🔒 | **Optimistic locking** | JPA `@Version` + ETag/`If-Match` ⇒ HTTP 412 on stale writes — concurrent editors can't clobber each other. |
-| 🧾 | **AOP audit** | `@Audited` + `AuditAspect` persist domain events as a cross-cutting concern — auditing can't be forgotten on new endpoints. |
-| 🗃️ | **Schema discipline** | Flyway (validate-on-migrate) + Hibernate `ddl-auto: validate` + a `FlywayValidationRunner`: drift fails startup, not a 2 a.m. query. |
-| 📈 | **Ops surfaces** | Per-provider metrics (`ProviderMetricsController`), saved-option analytics, Prometheus registry, OTel tracing, MDC correlation ids. |
+**Figure 1 — container/component view.** Every mutating path crosses auth,
+rate limiting, idempotency, and ownership checks before a service runs;
+auditing is aspect-driven so it cannot be forgotten on new endpoints.
+
+```mermaid
+flowchart TB
+    CLIENT["Web / FastAPI"] -->|Bearer JWT| FC
+    subgraph FC["Servlet filter chain"]
+        F1[CorrelationIdFilter] --> F2["JwtAuthFilter (SupabaseJwtVerifier: JWKS/RS256)"] --> F3["RateLimitFilter (Bucket4j)"] --> F4["BodyCachingFilter"] --> F5["IdempotencyInterceptor (@Idempotent)"]
+    end
+    FC --> CT
+    subgraph CT["Controllers (/api/v1)"]
+        C1[Quote]
+        C2[Booking]
+        C3["SavedOption + Analytics"]
+        C4[Shipment]
+        C5[ProviderMetrics]
+        C6[Health]
+    end
+    CT --> SV
+    subgraph SV["Services (@Transactional · @Cacheable · @Audited)"]
+        S1[QuoteService]
+        S2["QuoteFanoutService (scatter-gather)"]
+        S3[BookingService]
+        S4[SavedOptionService]
+        S5[ShipmentService]
+        S6["AiClaimGuard (trust boundary)"]
+        S7["IdempotencyCleanupJob (scheduled)"]
+    end
+    SV --> PR
+    subgraph PR["Provider layer (Strategy)"]
+        Q1["QuoteProvider port"] --> Q2[QuoteProviderRegistry] --> Q3["FedExQuoteProviderAdapter (sandbox) + mock"]
+    end
+    SV --> RP["Spring Data JPA + Specifications"]
+    RP --> DB[("Postgres — Flyway V1/V2, ddl-auto: validate")]
+    SV --> AOP["AuditAspect (@Audited) -> AuditLog"]
+    SV -.-> OBS["Actuator + Micrometer -> OTel OTLP + Prometheus"]
+```
+
+---
+
+## Request flow
+
+**Figure 2 — ingress to response, with every gate annotated.**
+
+```mermaid
+flowchart LR
+    A[Request] --> B["CorrelationIdFilter: X-Request-Id -> MDC"]
+    B --> C{"JWKS/RS256 verify ok?"}
+    C -->|no| E401[401]
+    C -->|yes| D{"rate-limit bucket has tokens?"}
+    D -->|no| E429["429 typed error"]
+    D -->|yes| E["BodyCachingFilter (hashable body)"]
+    E --> F{"@Idempotent? key seen?"}
+    F -->|replay| G["stored response returned"]
+    F -->|new| H["Controller -> Service (@Transactional)"]
+    H --> I{"ownership check"}
+    I -->|not owner| E403["OwnershipException"]
+    I -->|owner| J["repository / provider work"]
+    J --> K["@Audited aspect -> AuditLog"]
+    K --> L["typed response (+ ETag where applicable)"]
+```
 
 ---
 
 ## The trust boundary: AiClaimGuard
 
-An AI-assisted booking must survive four invariants — each failure a distinct,
-auditable refusal:
+**Figure 3 — an AI-assisted booking, re-derived from stored state.**
 
-1. **No unquoted bookings** — must reference a live `StoredQuote` this server produced.
-2. **Live quote only** — expired quotes are refused, never honoured at a stale price.
-3. **Explicit human confirmation** — an AI proposal is not consent.
-4. **Java wins on price** — the AI-stated total is re-validated against the
-   stored quote; acceptance returns the **stored** total.
-
-Plus the policy-aware refusal: an AI "this looks compliant" is downgraded to a
-refusal unless the deterministic compliance checker verified it. Pure,
-deterministic (injected `Clock`), exhaustively unit-tested.
-
-## Architecture
-
-```
-  JWT ──▶ CorrelationIdFilter ▶ JwtAuthFilter (JWKS/RS256) ▶ RateLimitFilter
-      ▶ BodyCachingFilter ▶ IdempotencyInterceptor
-      ▶ controllers (/api/v1: quotes · bookings · saved-options(+analytics) ·
-        shipments · provider-metrics · health)
-      ▶ services (@Transactional · @Cacheable · @Audited)
-        QuoteService · QuoteFanoutService · BookingService · SavedOptionService ·
-        ShipmentService · AiClaimGuard · IdempotencyCleanupJob
-      ▶ QuoteProvider port ─ registry ─ FedEx adapter (sandbox default) + mock
-      ▶ Spring Data JPA + Specifications ─ Flyway-migrated Postgres
+```mermaid
+sequenceDiagram
+    participant AI as AI layer (advisory claim)
+    participant BC as BookingController
+    participant G as AiClaimGuard
+    participant DB as StoredQuote
+    AI->>BC: booking request (quoteRef, aiStatedTotal, confirmed?)
+    BC->>G: validate(claim)
+    G->>DB: load StoredQuote(quoteRef)
+    alt no stored quote
+        G--xBC: REFUSE — unquoted booking
+    else expired
+        G--xBC: REFUSE — stale price never honoured
+    else not human-confirmed
+        G--xBC: REFUSE — AI proposal is not consent
+    else totals mismatch
+        G--xBC: REFUSE — Java wins on price
+    else all invariants hold
+        G-->>BC: proceed — authoritative total = STORED quote's
+        BC->>BC: idempotent write under optimistic lock
+    end
 ```
 
-Immutable `record` DTOs throughout (`ShippingServiceDto` + `QuoteTrust`,
-`TrackingStatusDto` + `TrackingStatus` enum); typed error responses via
-`GlobalExceptionHandler`; row-ownership checks (`OwnershipException`) on every
-user-scoped entity.
+**Figure 4 — the decision tree: each failed invariant is a distinct, auditable
+refusal.**
+
+```mermaid
+flowchart TB
+    A["AI-assisted booking claim"] --> B{"references StoredQuote?"}
+    B -->|no| R1["REFUSE: unquoted"]
+    B -->|yes| C{"quote still live?"}
+    C -->|no| R2["REFUSE: expired quote"]
+    C -->|yes| D{"explicit human confirmation?"}
+    D -->|no| R3["REFUSE: proposal is not consent"]
+    D -->|yes| E{"AI total == stored total?"}
+    E -->|no| R4["REFUSE: price mismatch — Java wins"]
+    E -->|yes| F{"AI claims compliant?"}
+    F -->|"yes, unverified"| R5["DOWNGRADE to refusal: only the deterministic checker may clear"]
+    F -->|"verified / n-a"| OK["PROCEED — return STORED total"]
+```
+
+Pure and deterministic (injected `Clock`), exhaustively unit-tested.
+
+---
+
+## Scatter-gather quoting
+
+**Figure 5 — parallel carriers; total latency ≈ slowest, not sum.** Failures
+surface as **`QuoteTrust`-tagged partials**, never silent gaps.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant QS as QuoteService
+    participant FO as QuoteFanoutService
+    participant P1 as Carrier A
+    participant P2 as Carrier B
+    participant CA as Caffeine/QuoteCache
+    C->>QS: GET quotes(shipmentId)
+    QS->>CA: cache lookup
+    alt hit
+        CA-->>QS: cached quotes (trust: cached)
+    else miss
+        QS->>FO: fanout(request)
+        par carrier A
+            FO->>P1: quote() on bounded executor, timeout armed
+            P1-->>FO: prices
+        and carrier B
+            FO->>P2: quote()
+            P2--xFO: timeout / error
+        end
+        FO-->>QS: normalized quotes + QuoteTrust per provider (live/estimated/mock/cached) + provider_status
+        QS->>CA: populate (expireAfterWrite 120s)
+    end
+    QS-->>C: options — degraded carriers visible, never silent
+```
+
+---
+
+## Concurrency & idempotency
+
+**Figure 6 — optimistic locking: `@Version` + ETag.**
+
+```mermaid
+sequenceDiagram
+    participant U1 as Writer 1
+    participant U2 as Writer 2
+    participant S as ShipmentService
+    U1->>S: GET shipment -> ETag v5
+    U2->>S: GET shipment -> ETag v5
+    U1->>S: PATCH If-Match v5
+    S-->>U1: 200 — version -> v6
+    U2->>S: PATCH If-Match v5
+    S--xU2: 412 Precondition Failed (stale)
+```
+
+**Figure 7 — idempotent retry: replay-safe writes.**
+
+```mermaid
+sequenceDiagram
+    participant C as Client (retrying)
+    participant I as IdempotencyInterceptor
+    participant K as idempotency_keys
+    C->>I: POST /bookings/redirect (Idempotency-Key k1)
+    I->>K: store(k1, body-hash) + execute
+    I-->>C: 201 response persisted
+    C->>I: same POST again (k1)
+    I->>K: k1 found, body-hash matches
+    I-->>C: replayed stored response (no double execution)
+    C->>I: k1 with DIFFERENT body
+    I--xC: IdempotencyConflictException
+    Note over K: scheduled IdempotencyCleanupJob purges expired keys
+```
+
+---
+
+## Object design (OOD)
+
+**Figure 8 — provider seam, record DTOs, exception taxonomy.** DTOs are
+immutable `record`s; entities inherit `@Version` from `BaseEntity`; JPA
+**Specifications** compose type-safe filtered queries instead of string JPQL.
+
+```mermaid
+classDiagram
+    class QuoteProvider {
+        <<interface>>
+        +getQuotes(request) ProviderQuote[]
+    }
+    QuoteProvider <|.. AbstractQuoteProvider
+    AbstractQuoteProvider <|-- FedExQuoteProviderAdapter
+    class QuoteProviderRegistry {
+        +providers() List~QuoteProvider~
+    }
+    QuoteProviderRegistry o-- QuoteProvider
+    class QuoteFanoutService {
+        +fanout(request)
+        -executor: ThreadPoolTaskExecutor
+    }
+    QuoteFanoutService ..> QuoteProviderRegistry
+    class ShippingServiceDto {
+        <<record>>
+        +price
+        +eta
+        +trust: QuoteTrust
+    }
+    class QuoteTrust {
+        <<record>>
+        +source: live|estimated|mock|cached
+        +freshness
+        +provider_status
+    }
+    ShippingServiceDto *-- QuoteTrust
+    class TrackingStatusDto {
+        <<record>>
+        +status: TrackingStatus
+        +events
+    }
+    class BaseEntity {
+        +id
+        +version (@Version)
+    }
+    class GlobalExceptionHandler {
+        <<RestControllerAdvice>>
+    }
+    class Exceptions {
+        ResourceNotFound
+        ResourceConflict
+        RateLimitExceeded
+        Ownership
+        IdempotencyConflict
+    }
+    GlobalExceptionHandler ..> Exceptions
+```
+
+---
+
+## Data model (ER)
+
+**Figure 9 — persisted entities (key fields).** Flyway owns this schema
+(`V1__baseline`, `V2__interview_upgrade`); Hibernate runs `ddl-auto: validate`
+plus a `FlywayValidationRunner`, so drift fails startup. *(Field lists are
+representative — the migrations are authoritative.)*
+
+```mermaid
+erDiagram
+    SHIPMENT_REQUEST ||--o{ QUOTE : "has quotes"
+    SHIPMENT_REQUEST {
+        uuid id PK
+        uuid user_id "ownership"
+        bigint version "optimistic lock"
+        string status
+    }
+    QUOTE {
+        uuid id PK
+        uuid shipment_request_id FK
+        string carrier
+        numeric total
+        timestamptz expires_at "live-quote invariant"
+        string trust_source
+    }
+    QUOTE ||--o{ REDIRECT_TRACKING : "booked via"
+    REDIRECT_TRACKING {
+        uuid id PK
+        uuid quote_id FK
+        uuid user_id
+        string outcome
+    }
+    SAVED_OPTION {
+        uuid id PK
+        uuid user_id "ownership"
+        jsonb option
+    }
+    IDEMPOTENCY_KEY {
+        string key PK
+        string body_hash
+        jsonb stored_response
+        timestamptz expires_at "cleanup job"
+    }
+    AUDIT_LOG {
+        uuid id PK
+        string action "@Audited aspect"
+        uuid actor
+        timestamptz at
+    }
+```
+
+---
+
+## Caching
+
+**Figure 10 — two-tier cache + the trust taxonomy.**
+
+```mermaid
+flowchart LR
+    REQ[Quote request] --> C1{"Caffeine: quotesByShipmentId (max 5000, 120s)"}
+    C1 -->|hit| OUT["serve — trust: cached"]
+    C1 -->|miss| C2{"bespoke QuoteCache (LRU/TTL, QuoteCacheKey)"}
+    C2 -->|hit| OUT
+    C2 -->|miss| FAN["parallel fan-out (bounded executor, timeouts)"]
+    FAN --> TAG["QuoteTrust per provider + provider_status"]
+    TAG --> FILL["populate caches"] --> OUT
+```
+
+---
 
 ## Security
 
-- JWKS/RS256 primary verification; Spring Security per-route rules; CSRF off
-  (stateless bearer API) with configured CORS.
+- **JWKS/RS256** primary verification (`SupabaseJwtVerifier`); HS256 only as
+  legacy/test fallback; Spring Security per-route rules; CSRF off (stateless
+  bearer API) with configured CORS.
 - **Prod fail-closed:** `require-jwt-secret: true`; error responses carry no
-  stacktraces/messages; actuator exposure limited to
-  `health,info,metrics,caches,prometheus`; **Swagger returns 401 in prod**.
+  stacktraces/messages; actuator limited to
+  `health,info,metrics,caches,prometheus`; **Swagger 401 in prod**.
+- **Row-ownership authorization** (`OwnershipException`) on every user-scoped
+  entity — object-level access control, not just authentication.
 
-## Reliability & correctness
+| Threat | Control |
+|---|---|
+| Forged identity | JWKS/RS256 verification |
+| Cross-user data access | ownership checks per entity |
+| Replayed/double writes | idempotency keys + body hash |
+| Brute-force / abuse | Bucket4j buckets (20/30/10 per min) |
+| Info leakage via errors | prod stacktraces/messages `never`; Swagger 401 |
+| AI-invented price/clearance | AiClaimGuard invariants (Fig. 3–4) |
 
-- Optimistic locking (`@Version` + ETag) · idempotent writes + cleanup job ·
-  `@Transactional` boundaries · Flyway validate + startup schema check ·
-  deterministic sorting (`QuoteSortOption` comparators — labels are code, the
-  model only explains them).
+---
 
-## Performance
+## Performance & availability
 
-- Parallel fan-out (`QuoteFanoutService`, bounded `ThreadPoolTaskExecutor`,
-  per-call timeouts).
-- Two-tier caching: Spring **Caffeine** (`quotesByShipmentId`, `shipmentById` —
-  `maximumSize=5000, expireAfterWrite=120s`) + a bespoke `QuoteCache` (LRU/TTL).
-- **Bucket4j** token buckets: shipments **20/min** · quotes **30/min** ·
-  bookings **10/min** (env-tunable), typed 429s.
+**Latency budget (target):**
 
-## Observability & audit
+| Path | Budget *(target)* |
+|---|---|
+| Cache hit | < 30 ms |
+| Single-carrier quote | < 1.5 s |
+| Full fan-out (parallel) | ≈ slowest carrier, < 2 s |
+| Booking validation (AiClaimGuard) | < 50 ms |
 
-Micrometer tracing → OTLP exporter + Prometheus registry; `X-Request-Id` into
-MDC on every log line and propagated outbound; `@Audited` AOP events into
-`AuditLog`; provider call outcomes into `ProviderMetrics`.
+```mermaid
+xychart-beta
+    title "Quote path latency in ms (target)"
+    x-axis ["cache-hit", "single-carrier", "fan-out", "guard"]
+    y-axis "ms (target)" 0 --> 2000
+    bar [30, 1500, 2000, 50]
+```
+
+**Degradation matrix (coded behaviors, facts):**
+
+| Failure | Behavior |
+|---|---|
+| One carrier down/slow | per-call timeout → trust-tagged partial results |
+| Stale concurrent write | HTTP 412 via ETag/@Version |
+| Duplicate write retry | idempotent replay; payload mismatch → conflict |
+| Schema drift | startup fails (validate mode + FlywayValidationRunner) |
+| Missing JWT secret (prod) | boot refuses (`require-jwt-secret: true`) |
+
+---
+
+## Deployment topology
+
+**Figure 11 — production layout.**
+
+```mermaid
+flowchart LR
+    W["Render: shipsmart-web"] -->|JWT| J["Render: shipsmart (this, Java)"]
+    A["Render: shipsmart-api-python"] -->|httpx| J
+    J --> DB[("Supabase Postgres — Flyway-managed tables")]
+    OPS[Operator] -.->|"/api/v1/health · /actuator/health · /actuator/prometheus"| J
+```
+
+Profiles: `application-local.yml` vs `application-production.yml` — prod
+requires the JWT secret, suppresses stacktraces, keeps actuator exposure
+minimal.
+
+---
 
 ## Running locally
 
@@ -159,19 +475,18 @@ Gradle 8.12 via the wrapper — no host install required. JDK 17 toolchain.
 
 | Env | Effect |
 |---|---|
-| `SUPABASE_JWT_SECRET` / `REQUIRE_JWT_SECRET` | JWT verification; prod sets `require-jwt-secret: true` |
+| `SUPABASE_JWT_SECRET` / `REQUIRE_JWT_SECRET` | JWT verification; prod fail-closed |
 | `SHIPSMART_RATE_LIMIT_ENABLED` / `_SHIPMENTS` / `_QUOTES` / `_BOOKINGS` | Bucket4j limits (defaults 20/30/10 per min) |
-| `SHIPSMART_IDEMPOTENCY_ENABLED` | idempotency keys on `POST /shipments`, `POST /bookings/redirect` |
+| `SHIPSMART_IDEMPOTENCY_ENABLED` | idempotency keys on the write endpoints |
 | `spring.cache.caffeine.spec` | `maximumSize=5000,expireAfterWrite=120s` |
-| profiles | `application-local.yml` vs `application-production.yml` (fail-closed) |
 
 ## Tests
 
 **111 `@Test` across 21 classes** — JUnit 5 + AssertJ unit tests with injected
 `Clock`, plus **Testcontainers** integration tests against real ephemeral
-Postgres (no H2 look-alikes). **Spotless** (google-java-format) is wired into
-`check`/`build` — formatting is enforced, not hoped. Cross-repo: the §5.6 trust
-boundary and DTO wire shapes are asserted by **ShipSmart-Test** in CI.
+Postgres. **Spotless** (google-java-format) is wired into `check`/`build`.
+Cross-repo: the §5.6 trust boundary and DTO wire shapes are asserted by
+**ShipSmart-Test** in CI.
 
 ## License
 
