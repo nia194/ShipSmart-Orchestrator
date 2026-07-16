@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ShipSmart-Orchestrator",
-    "description": "Java transactional API \u2014 health + the shipments chain (JWT auth, idempotency, ownership scoping) + providers. A collection pre-request mints an HS256 JWT with the shared e2e test secret (NOT production).",
+    "description": "Java transactional API \u2014 health + the shipments chain (JWT auth, idempotency, ownership scoping), quotes fan-out with trust metadata, saved options + analytics, booking redirect audit, and provider metrics. A collection pre-request mints an HS256 JWT with the shared e2e test secret (NOT production).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -49,6 +49,10 @@
     },
     {
       "key": "shipment_id",
+      "value": ""
+    },
+    {
+      "key": "saved_option_id",
       "value": ""
     }
   ],
@@ -411,6 +415,420 @@
                 "api",
                 "v1",
                 "providers"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quotes (provider fan-out + trust)",
+      "item": [
+        {
+          "name": "generate quotes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('prime + private tiers with priced options', () => { pm.expect(b).to.have.keys('prime','private'); pm.expect(b.prime.top).to.be.an('array').that.is.not.empty; pm.expect(b.prime.top[0].price).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/quotes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "quotes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": \"90210\",\n  \"destination\": \"10001\",\n  \"dropOffDate\": \"2026-08-01\",\n  \"expectedDeliveryDate\": \"2026-08-08\",\n  \"packages\": [\n    {\n      \"type\": \"box\",\n      \"qty\": \"1\",\n      \"weight\": \"5\",\n      \"l\": \"12\",\n      \"w\": \"8\",\n      \"h\": \"6\",\n      \"handling\": \"none\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "unknown shipmentRequestId -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/quotes?shipmentRequestId=00000000-0000-0000-0000-0000000000ff",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "quotes"
+              ],
+              "query": [
+                {
+                  "key": "shipmentRequestId",
+                  "value": "00000000-0000-0000-0000-0000000000ff"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Saved options (auth + analytics)",
+      "item": [
+        {
+          "name": "save option",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('saved_option_id', b.id);",
+                  "pm.test('persisted with quote-trust metadata', () => { pm.expect(b.id).to.be.a('string'); pm.expect(b.svc.trust).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/saved-options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "saved-options"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quoteServiceId\": \"ups-ground-1\",\n  \"carrier\": \"UPS\",\n  \"serviceName\": \"UPS Ground\",\n  \"origin\": \"90210\",\n  \"destination\": \"10001\",\n  \"price\": 10.5,\n  \"transitDays\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "appears in owner's list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('saved option listed', () => pm.expect(pm.response.json().map(o => o.id)).to.include(pm.collectionVariables.get('saved_option_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/saved-options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "saved-options"
+              ]
+            }
+          }
+        },
+        {
+          "name": "analytics aggregates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('aggregates reflect the save', () => { pm.expect(b.totalSavedOptions).to.be.at.least(1); pm.expect(b.carriersSortedByCount).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/saved-options/analytics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "saved-options",
+                "analytics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "remove saved option",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2xx', () => pm.expect([200, 204]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/saved-options/{{saved_option_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "saved-options",
+                "{{saved_option_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "track booking redirect",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('redirect echoed after audit', () => pm.expect(pm.response.json().redirectUrl).to.eql('https://www.ups.com/ship'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/bookings/redirect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "redirect"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"ups-ground-1\",\n  \"carrier\": \"UPS\",\n  \"serviceName\": \"UPS Ground\",\n  \"redirectUrl\": \"https://www.ups.com/ship\",\n  \"origin\": \"90210\",\n  \"destination\": \"10001\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Provider metrics",
+      "item": [
+        {
+          "name": "metrics snapshot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('per-carrier snapshot', () => pm.expect(pm.response.json().carriers).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/providers/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "providers",
+                "metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "recent calls for one carrier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('event list', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/providers/metrics/fedex/recent",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "providers",
+                "metrics",
+                "fedex",
+                "recent"
               ]
             }
           }
